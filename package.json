@@ -1,0 +1,53 @@
+{
+  "name": "consentledger",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Control plane for AI agents that spend money: agents propose, humans sign with passkeys, PayPal settles.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20.9.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.9",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . && prettier --check \"src/**\" \"tests/**\" \"*.{ts,mjs,cjs,json,yml}\" \"scripts/**/*.{ts,mjs,js}\"",
+    "arch": "pnpm exec depcruise src --config .dependency-cruiser.cjs",
+    "test:unit": "vitest run --project unit",
+    "test:int": "node -e \"if (!process.env.DATABASE_URL) { console.error('\\n  test:int requires DATABASE_URL. Run pnpm db:up first, then set DATABASE_URL.\\n  Skipping integration tests.'); process.exit(0); } require('child_process').execSync('vitest run --project integration', { stdio: 'inherit' });\"",
+    "test:e2e": "node -e \"console.error('\\n  test:e2e is not implemented until issue #4 (Passkey Identity and Consent).\\n  Install Playwright and configure a virtual WebAuthn authenticator.\\n'); process.exit(1);\"",
+    "db:up": "docker compose up -d db",
+    "db:down": "docker compose down",
+    "db:generate": "node -e \"console.error('\\n  db:generate is not implemented until issue #3 (Evidence Ledger Postgres).\\n  Install Drizzle Kit and configure the schema.\\n'); process.exit(1);\"",
+    "db:migrate": "node -e \"console.error('\\n  db:migrate is not implemented until issue #3 (Evidence Ledger Postgres).\\n  Run pnpm db:generate first.\\n'); process.exit(1);\"",
+    "verify:bundle": "node -e \"console.error('\\n  verify:bundle is not implemented until issue #12 (Evidence Bundle and Offline Verifier).\\n  Usage: pnpm verify:bundle <bundle.json>\\n'); process.exit(1);\"",
+    "verify": "pnpm typecheck && pnpm lint && pnpm arch && pnpm test:unit && node scripts/verify-int.mjs && pnpm build"
+  },
+  "dependencies": {
+    "next": "16.4.0",
+    "pino": "10.4.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "@types/react": "19.1.8",
+    "@types/react-dom": "19.1.5",
+    "@typescript-eslint/eslint-plugin": "8.71.1",
+    "@typescript-eslint/parser": "8.71.1",
+    "@vitest/coverage-v8": "5.0.3",
+    "dependency-cruiser": "18.5.0",
+    "eslint": "10.12.0",
+    "eslint-config-next": "16.4.0",
+    "fast-check": "4.10.2",
+    "prettier": "3.9.10",
+    "tailwindcss": "4.3.3",
+    "typescript": "6.0.3",
+    "vitest": "5.0.3"
+  }
+}

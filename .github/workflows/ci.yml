@@ -1,0 +1,144 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  # ─── Main verify job ─────────────────────────────────────────────────────────
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+
+    services:
+      db:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: consentledger
+          POSTGRES_PASSWORD: consentledger
+          POSTGRES_DB: consentledger
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U consentledger -d consentledger"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Required-now variables — safe values for CI
+      NODE_ENV: test
+      LOG_LEVEL: warn
+      SETTLEMENT_MODE: simulated
+      LLM_MODE: mock
+      LAB_ENABLED: "false"
+      COMMIT: ${{ github.sha }}
+      # Integration tests — Postgres service above
+      DATABASE_URL: postgresql://consentledger:consentledger@localhost:5432/consentledger
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history needed for TruffleHog diff scan
+          fetch-depth: 0
+
+      - name: Read .nvmrc
+        id: nvmrc
+        run: echo "NODE_VERSION=$(cat .nvmrc)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.nvmrc.outputs.NODE_VERSION }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+          run_install: false
+
+      - name: Get pnpm store path
+        id: pnpm-cache
+        run: echo "STORE=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE }}
+          key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Architecture check
+        run: pnpm arch
+
+      - name: Unit tests
+        run: pnpm test:unit
+
+      - name: Integration tests
+        run: node scripts/verify-int.mjs
+
+      - name: Build
+        run: pnpm build
+
+  # ─── Secret scanning job (non-blocking audit, separate from verify) ──────────
+  # Uses TruffleHog OSS v3.99.2, pinned by commit SHA for supply-chain safety.
+  # Scans only the diff on PRs; scans the full repo on push to main/master.
+  # Read: https://github.com/trufflesecurity/trufflehog (2026-10-11)
+  secret-scan:
+    name: Secret scan (TruffleHog)
+    runs-on: ubuntu-latest
+    # Non-blocking: failures here do not fail the overall workflow.
+    # A secret leak is serious but this job is advisory — the verify job is the gate.
+    continue-on-error: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: TruffleHog OSS
+        # Pinned to v3.99.2 @ e76dff8 (2026-10-08)
+        # Source: https://github.com/trufflesecurity/trufflehog/releases/tag/v3.99.2
+        uses: trufflesecurity/trufflehog@e76dff8
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --debug --only-verified
+
+  # ─── Dependency audit (non-blocking, report only) ────────────────────────────
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+          run_install: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Audit production dependencies
+        # --omit=dev: only check production deps (AGENTS.md §5 CI step)
+        # Non-blocking: output is a report, not a gate
+        run: pnpm audit --omit=dev || true

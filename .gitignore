@@ -1,0 +1,32 @@
+# dependencies
+node_modules
+.pnpm-store
+
+# Next.js
+.next
+out
+
+# build
+dist
+
+# env — never commit secrets
+.env
+.env.local
+.env.*.local
+
+# coverage
+coverage
+.coverage
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea
+*.swp
+*.swo
+
+# misc
+*.tsbuildinfo
+next-env.d.ts

@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+/* Design tokens from docs/DESIGN.md */
+:root {
+  --ink: #0b0d10;
+  --panel: #12161b;
+  --panel-2: #181d24;
+  --line: #232a33;
+  --text: #e7ecf2;
+  --text-dim: #8c97a6;
+  --paper: #f3efe6;
+  --paper-ink: #1b1a17;
+  --seal: #3ddc97;
+  --breach: #ff5c5c;
+  --amber: #f5b544;
+  --link: #5aa9ff;
+}
