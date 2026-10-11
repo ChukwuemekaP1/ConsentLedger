@@ -1,32 +1,44 @@
-# dependencies
+# ignore everything not needed for the public GitHub repo
+
+# ── AI agent working files (stay local, not for public repo) ──────────────────
+prompts/
+issues/
+CLAUDE.md
+
+# ── Auto-generated PR write-ups (internal, not public docs) ──────────────────
+docs/pr-*.md
+
+# ── dependencies ─────────────────────────────────────────────────────────────
 node_modules
 .pnpm-store
 
-# Next.js
+# ── Next.js ───────────────────────────────────────────────────────────────────
 .next
 out
+next-env.d.ts
 
-# build
+# ── build ─────────────────────────────────────────────────────────────────────
 dist
 
-# env — never commit secrets
+# ── env — never commit secrets ────────────────────────────────────────────────
 .env
 .env.local
 .env.*.local
 
-# coverage
+# ── coverage ──────────────────────────────────────────────────────────────────
 coverage
 .coverage
 
-# OS
+# ── OS ────────────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 
-# IDE
+# ── IDE ───────────────────────────────────────────────────────────────────────
 .idea
+.vscode/settings.json
 *.swp
 *.swo
 
-# misc
+# ── TypeScript incremental build cache ───────────────────────────────────────
 *.tsbuildinfo
-next-env.d.ts
+tsconfig.tsbuildinfo
