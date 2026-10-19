@@ -112,7 +112,7 @@ jobs:
       - name: TruffleHog OSS
         # Pinned to v3.99.2 @ e76dff8 (2026-10-08)
         # Source: https://github.com/trufflesecurity/trufflehog/releases/tag/v3.99.2
-        uses: trufflesecurity/trufflehog@e76dff8
+        uses: trufflesecurity/trufflehog@e76dff8a7e57d6df0c60ad8cbf5d5cba505a8fc9
         with:
           path: ./
           base: ${{ github.event.repository.default_branch }}

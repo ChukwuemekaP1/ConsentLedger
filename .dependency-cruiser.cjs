@@ -17,20 +17,19 @@ module.exports = {
       to: {
         pathNot: [
           "^src/domain",
+          // node:crypto — explicit prefix form
           "^node:crypto$",
+          // crypto — Node built-in without prefix (dep-cruiser may resolve to bare name)
+          "^crypto$",
           // zod — schema validation is pure (no I/O) and essential for domain types
           "^zod",
-        ],
-        // Don't flag Node built-ins other than the explicit ones above
-        dependencyTypesNot: ["npm-dev", "npm-optional", "npm-peer"],
-        pathNot: [
-          "^src/domain",
-          "^node:crypto$",
-          "^zod",
-          // node built-ins beyond node:crypto are caught by the explicit pattern above;
-          // we also allow type-only imports from node built-ins (e.g. node:util types)
+          // Resolve zod from pnpm store
+          "node_modules.*[/\\\\]zod",
+          // Allow all node: prefixed built-ins (type imports etc.)
           "^node:",
         ],
+        // Don't flag dev/optional/peer npm deps
+        dependencyTypesNot: ["npm-dev", "npm-optional", "npm-peer"],
       },
     },
 
@@ -41,7 +40,7 @@ module.exports = {
       severity: "error",
       from: { path: "^src/application" },
       to: {
-        path: "^src/(infrastructure|interface|app|ui)",
+        path: "^src/(infrastructure|interface|app/|ui)",
       },
     },
 
@@ -54,7 +53,7 @@ module.exports = {
       severity: "error",
       from: { path: "^src/infrastructure" },
       to: {
-        path: "^src/(interface|app|ui)",
+        path: "^src/(interface|app/|ui)",
       },
     },
 
@@ -77,7 +76,7 @@ module.exports = {
       name: "app-imports-infrastructure",
       comment: "app and ui must not import infrastructure. Use interface or application types.",
       severity: "error",
-      from: { path: "^src/(app|ui)" },
+      from: { path: "^src/(app/|ui)" },
       to: {
         path: "^src/infrastructure",
       },
