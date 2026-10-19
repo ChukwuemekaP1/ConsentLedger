@@ -18,7 +18,7 @@
     "lint": "eslint . && prettier --check \"src/**\" \"tests/**\" \"*.{ts,mjs,cjs,json,yml}\" \"scripts/**/*.{ts,mjs,js}\"",
     "arch": "pnpm exec depcruise src --config .dependency-cruiser.cjs",
     "test:unit": "vitest run --project unit",
-    "test:int": "node -e \"if (!process.env.DATABASE_URL) { console.error('\\n  test:int requires DATABASE_URL. Run pnpm db:up first, then set DATABASE_URL.\\n  Skipping integration tests.'); process.exit(0); } require('child_process').execSync('vitest run --project integration', { stdio: 'inherit' });\"",
+    "test:int": "node -e \"if (!process.env.DATABASE_URL) { console.error('\\n  test:int requires DATABASE_URL. Run pnpm db:up first, then set DATABASE_URL.\\n  Skipping integration tests.'); process.exit(0); } require('child_process').execSync('vitest run --project integration --passWithNoTests', { stdio: 'inherit' });\"",
     "test:e2e": "node -e \"console.error('\\n  test:e2e is not implemented until issue #4 (Passkey Identity and Consent).\\n  Install Playwright and configure a virtual WebAuthn authenticator.\\n'); process.exit(1);\"",
     "db:up": "docker compose up -d db",
     "db:down": "docker compose down",

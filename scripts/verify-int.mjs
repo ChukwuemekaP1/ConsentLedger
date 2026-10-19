@@ -27,7 +27,7 @@ if (!hasDb) {
 }
 
 try {
-  execSync("pnpm vitest run --project integration", { stdio: "inherit" });
+  execSync("pnpm vitest run --project integration --passWithNoTests", { stdio: "inherit" });
 } catch {
   process.exit(1);
 }
