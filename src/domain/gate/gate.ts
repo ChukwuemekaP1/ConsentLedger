@@ -153,11 +153,125 @@ export interface GateInput {
  *
  * INVARIANT I-11: any unknown, missing or ambiguous input is DENY, never ALLOW.
  */
+/**
+ * evaluatePreConsentGate — runs Gate checks 1-4 and policy checks before initiating approval.
+ *
+ * Confirms that:
+ *   1. Mandate status is ISSUED (waiting for consent)
+ *   2. Validity window is active
+ *   3. Hash integrity is verified (recomputed hash === stored hash)
+ *   4. Authority (and Merchant for Cart) attestations verify under trusted keys
+ *   5. Pinned policy is verified and current active policy allows
+ */
+export function evaluatePreConsentGate(input: {
+  readonly mandate: StoredMandateRecord;
+  readonly trustedKeys: TrustedKeys;
+  readonly pinnedPolicy: PolicyDocument;
+  readonly currentPolicy: PolicyDocument;
+  readonly now: Timestamp;
+}): Result<void, GateDenial> {
+  const { mandate, now } = input;
+  const terms = mandate.terms;
+
+  // Check 1: Status must be ISSUED (or DRAFTED)
+  if (mandate.status === "REVOKED") {
+    return err({ code: "MANDATE_REVOKED", check: 1, message: "Mandate has been revoked" });
+  }
+  if (mandate.status !== "ISSUED" && mandate.status !== "DRAFTED") {
+    return err({
+      code: "MANDATE_STATE_INVALID",
+      check: 1,
+      message: `Mandate status '${mandate.status}' does not permit signing (must be ISSUED)`,
+    });
+  }
+
+  // Check 2: Validity window
+  if (!isWithinValidity(terms, now)) {
+    return err({
+      code: "MANDATE_EXPIRED",
+      check: 2,
+      message: "Mandate is outside its validity window",
+    });
+  }
+
+  // Check 3: Hash integrity
+  const recomputed = recomputeHash(terms);
+  if (!recomputed.ok) {
+    return err({ code: "HASH_MISMATCH", check: 3, message: "Failed to recompute mandate hash" });
+  }
+  if (!timingSafeEqualHex(recomputed.value, mandate.hash)) {
+    return err({
+      code: "HASH_MISMATCH",
+      check: 3,
+      message: "Recomputed hash does not match stored hash",
+    });
+  }
+
+  // Check 4: Attestations
+  const required = requiredRoles(terms.kind);
+  for (const role of required) {
+    const attestation = mandate.attestations.find((a) => a.role === role);
+    if (!attestation) {
+      const code =
+        role === "AUTHORITY" ? "AUTHORITY_SIGNATURE_INVALID" : "MERCHANT_SIGNATURE_INVALID";
+      return err({ code, check: 4, message: `Missing ${role} attestation` });
+    }
+    const trustedEntry = input.trustedKeys.get(attestation.keyId);
+    if (!trustedEntry || trustedEntry.role !== role) {
+      const code =
+        role === "AUTHORITY" ? "AUTHORITY_SIGNATURE_INVALID" : "MERCHANT_SIGNATURE_INVALID";
+      return err({
+        code,
+        check: 4,
+        message: `No trusted key for ${role} keyId ${attestation.keyId}`,
+      });
+    }
+    const valid = verifyHash(mandate.hash as Hash, attestation.signature, trustedEntry.publicKey);
+    if (!valid) {
+      const code =
+        role === "AUTHORITY" ? "AUTHORITY_SIGNATURE_INVALID" : "MERCHANT_SIGNATURE_INVALID";
+      return err({ code, check: 4, message: `${role} signature verification failed` });
+    }
+  }
+
+  // Check 6: Policy evaluation
+  const pinnedPolicyRef = terms.policy;
+  const pinnedHash = hashPolicy(input.pinnedPolicy);
+  if (!pinnedHash.ok || pinnedHash.value !== pinnedPolicyRef.hash) {
+    return err({
+      code: "POLICY_DRIFT",
+      check: 6,
+      message: "Pinned policy hash does not match known policy",
+    });
+  }
+
+  const policyCtx: PolicyContext = buildPolicyContext(terms);
+
+  const pinnedEval = evaluatePolicy(input.pinnedPolicy, policyCtx);
+  if (pinnedEval.decision !== "ALLOW") {
+    return err({
+      code: "POLICY_DENIED",
+      check: 6,
+      message: `Pinned policy denied: ${pinnedEval.reasons.join(", ")}`,
+    });
+  }
+
+  const currentEval = evaluatePolicy(input.currentPolicy, policyCtx);
+  if (currentEval.decision !== "ALLOW") {
+    return err({
+      code: "POLICY_DRIFT",
+      check: 6,
+      message: `Current policy is stricter than at signing time: ${currentEval.reasons.join(", ")}`,
+    });
+  }
+
+  return ok(undefined);
+}
+
 export function evaluateGate(input: GateInput): Result<GateApproval, GateDenial> {
   const { mandate, now } = input;
   const terms = mandate.terms;
 
-  // ─── Check 1: Status permits execution ─────────────────────────────────────
   {
     const { status } = mandate;
     if (status === "REVOKED") {
@@ -264,7 +378,8 @@ export function evaluateGate(input: GateInput): Result<GateApproval, GateDenial>
     }
 
     // Build context for policy evaluation
-    const policyCtx: PolicyContext = buildPolicyContext(terms, input);
+    const spendReq = "merchantId" in input.spendRequest ? input.spendRequest : undefined;
+    const policyCtx: PolicyContext = buildPolicyContext(terms, spendReq);
 
     // Evaluate the PINNED policy (at signing time) — must still ALLOW
     const pinnedEval = evaluatePolicy(input.pinnedPolicy, policyCtx);
@@ -338,7 +453,7 @@ export function evaluateGate(input: GateInput): Result<GateApproval, GateDenial>
 
 function buildPolicyContext(
   terms: CartMandateTerms | IntentMandateTerms,
-  input: GateInput,
+  spendRequest?: IntentSpendRequest | undefined,
 ): PolicyContext {
   if (terms.kind === "CART") {
     return {
@@ -347,11 +462,10 @@ function buildPolicyContext(
       merchantId: terms.payee.merchantId,
     };
   } else {
-    const spend = input.spendRequest as IntentSpendRequest;
     return {
-      amountMinor: spend.amountMinor,
-      currency: spend.currency,
-      merchantId: spend.merchantId,
+      amountMinor: spendRequest?.amountMinor ?? 0,
+      currency: spendRequest?.currency ?? terms.scope.currency,
+      merchantId: spendRequest?.merchantId ?? "",
     };
   }
 }

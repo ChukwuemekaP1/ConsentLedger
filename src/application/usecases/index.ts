@@ -4,3 +4,7 @@
 
 export * from "./append-ledger-event.js";
 export * from "./verify-ledger.js";
+export * from "./generate-registration-options.js";
+export * from "./register-passkey.js";
+export * from "./generate-consent-options.js";
+export * from "./record-consent.js";

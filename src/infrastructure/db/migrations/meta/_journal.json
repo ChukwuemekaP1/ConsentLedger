@@ -22,6 +22,13 @@
       "when": 1792410562655,
       "tag": "0002_far_logan",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792426603475,
+      "tag": "0003_chunky_alex_wilder",
+      "breakpoints": true
     }
   ]
 }

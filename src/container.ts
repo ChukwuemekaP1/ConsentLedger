@@ -11,6 +11,7 @@
  * ADR-0001: hexagonal architecture with enforced boundaries.
  */
 
+import type { KeyObject } from "node:crypto";
 import { config } from "./infrastructure/config/env.js";
 import { logger, childLogger } from "./infrastructure/logging/logger.js";
 import { SystemClock } from "./infrastructure/clock/system-clock.js";
@@ -18,16 +19,21 @@ import { CryptoIdGenerator } from "./infrastructure/clock/crypto-id-generator.js
 import { createDatabaseClient } from "./infrastructure/db/client.js";
 import { PostgresUnitOfWork } from "./infrastructure/db/unit-of-work.js";
 import { PostgresLedgerRepo } from "./infrastructure/db/repositories/postgres-ledger-repo.js";
+import { PostgresPasskeyRepo } from "./infrastructure/db/repositories/postgres-passkey-repo.js";
+import { PostgresMandateRepo } from "./infrastructure/db/repositories/postgres-mandate-repo.js";
 import { AppendLedgerEvent } from "./application/usecases/append-ledger-event.js";
 import { VerifyLedger } from "./application/usecases/verify-ledger.js";
-import { PostgresPasskeyRepo } from "./infrastructure/db/repositories/postgres-passkey-repo.js";
-import { SimpleWebAuthnAdapter } from "./infrastructure/webauthn/simplewebauthn-adapter.js";
-import { SessionService } from "./infrastructure/auth/session.js";
 import { GenerateRegistrationOptionsUseCase } from "./application/usecases/generate-registration-options.js";
 import { RegisterPasskeyUseCase } from "./application/usecases/register-passkey.js";
+import { GenerateConsentOptionsUseCase } from "./application/usecases/generate-consent-options.js";
+import { RecordConsentUseCase } from "./application/usecases/record-consent.js";
+import { SimpleWebAuthnAdapter } from "./infrastructure/webauthn/simplewebauthn-adapter.js";
+import { SessionService } from "./infrastructure/auth/session.js";
+import { keyId, importPublicKeySpkiBase64 } from "./domain/crypto/signing.js";
 import type { UnitOfWork } from "./application/ports/unit-of-work.js";
 import type { LedgerRepo } from "./application/ports/ledger-repo.js";
 import type { PasskeyRepo } from "./application/ports/passkey-repo.js";
+import type { MandateRepo } from "./application/ports/mandate-repo.js";
 import type { WebAuthnRegistrationPort } from "./application/ports/webauthn-port.js";
 
 // ─── Singleton adapters ───────────────────────────────────────────────────────
@@ -79,6 +85,30 @@ function getPasskeyRepo(): PasskeyRepo {
   }
   return new PostgresPasskeyRepo(client.db);
 }
+function getMandateRepo(): MandateRepo {
+  const client = getDbClient();
+  if (!client) {
+    throw new Error("DATABASE_URL is not configured; MandateRepo cannot be initialized");
+  }
+  return new PostgresMandateRepo(client.db);
+}
+
+function getTrustedKeys(): Map<string, { role: "AUTHORITY" | "MERCHANT"; publicKey: KeyObject }> {
+  const map = new Map<string, { role: "AUTHORITY" | "MERCHANT"; publicKey: KeyObject }>();
+  if (config.AUTHORITY_PUBLIC_KEY_B64) {
+    const pub = importPublicKeySpkiBase64(config.AUTHORITY_PUBLIC_KEY_B64);
+    if (pub.ok) {
+      map.set(keyId(pub.value), { role: "AUTHORITY", publicKey: pub.value });
+    }
+  }
+  if (config.MERCHANT_PUBLIC_KEY_B64) {
+    const pub = importPublicKeySpkiBase64(config.MERCHANT_PUBLIC_KEY_B64);
+    if (pub.ok) {
+      map.set(keyId(pub.value), { role: "MERCHANT", publicKey: pub.value });
+    }
+  }
+  return map;
+}
 
 // ─── Container ────────────────────────────────────────────────────────────────
 
@@ -98,6 +128,8 @@ export const container = {
   getUnitOfWork,
   getLedgerRepo,
   getPasskeyRepo,
+  getMandateRepo,
+  getTrustedKeys,
   getAppendLedgerEvent: (uow?: UnitOfWork) =>
     new AppendLedgerEvent(clock, idGenerator, uow ?? getUnitOfWork()),
   getVerifyLedger: (repo?: LedgerRepo) => new VerifyLedger(repo ?? getLedgerRepo()),
@@ -118,6 +150,28 @@ export const container = {
       idGenerator,
       webauthn ?? webauthnAdapter,
       repo ?? getPasskeyRepo(),
+      appendLedgerEvent ??
+        (config.DATABASE_URL
+          ? new AppendLedgerEvent(clock, idGenerator, getUnitOfWork())
+          : undefined),
+    ),
+  getGenerateConsentOptions: (passkeyRepo?: PasskeyRepo, mandateRepo?: MandateRepo) =>
+    new GenerateConsentOptionsUseCase(
+      clock,
+      idGenerator,
+      passkeyRepo ?? getPasskeyRepo(),
+      mandateRepo ?? getMandateRepo(),
+    ),
+  getRecordConsent: (
+    passkeyRepo?: PasskeyRepo,
+    mandateRepo?: MandateRepo,
+    appendLedgerEvent?: AppendLedgerEvent,
+  ) =>
+    new RecordConsentUseCase(
+      clock,
+      idGenerator,
+      passkeyRepo ?? getPasskeyRepo(),
+      mandateRepo ?? getMandateRepo(),
       appendLedgerEvent ??
         (config.DATABASE_URL
           ? new AppendLedgerEvent(clock, idGenerator, getUnitOfWork())

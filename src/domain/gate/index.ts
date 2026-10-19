@@ -16,4 +16,9 @@ export type {
   IntentSpendRequest,
   StoredMandateRecord,
 } from "./gate.js";
-export { evaluateGate } from "./gate.js";
+export { evaluateGate, evaluatePreConsentGate } from "./gate.js";
+export {
+  verifyPasskeyConsent,
+  type VerifyConsentInput,
+  type ConsentVerificationError,
+} from "./consent.js";
