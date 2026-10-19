@@ -155,3 +155,17 @@ export function evaluatePolicy(policy: PolicyDocument, context: PolicyContext): 
 export function hashPolicy(policy: PolicyDocument): Result<string, CanonicalError> {
   return hashCanonical(policy);
 }
+
+/**
+ * Seeded default policy v1 (per-transaction cap $100, merchant and currency allowlists).
+ * ARCHITECTURE.md §4.1, Issue #5.
+ */
+export const DEFAULT_POLICY_V1: PolicyDocument = {
+  id: "policy-v1",
+  version: 1,
+  rules: {
+    maxPerTxMinor: 10000, // $100.00 max per transaction
+    merchantAllowlist: ["shopx", "coffee-works", "cloudco", "office-plus"],
+    currencyAllowlist: ["USD"],
+  },
+};

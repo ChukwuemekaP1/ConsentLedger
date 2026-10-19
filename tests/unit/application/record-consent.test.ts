@@ -44,6 +44,29 @@ class InMemoryMandateRepo implements MandateRepo {
     // In-memory simulation: no-op
   }
 
+  async createMandate(mandate: {
+    id: string;
+    kind: "CART" | "INTENT";
+    correlationId: string;
+    principalId: string;
+    agentId: string;
+    terms: StoredMandateRecord["terms"];
+    hash: string;
+    attestations: StoredMandateRecord["attestations"];
+    status: string;
+    expiresAt: string;
+    createdAt: string;
+  }): Promise<StoredMandateRecord> {
+    const record: StoredMandateRecord = {
+      terms: mandate.terms,
+      hash: mandate.hash,
+      attestations: mandate.attestations,
+      status: mandate.status,
+    };
+    this.mandates.set(mandate.id, record);
+    return record;
+  }
+
   async updateMandateStatus(id: string, status: string): Promise<void> {
     const m = this.mandates.get(id);
     if (m) {

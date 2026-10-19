@@ -8,3 +8,4 @@ export * from "./generate-registration-options.js";
 export * from "./register-passkey.js";
 export * from "./generate-consent-options.js";
 export * from "./record-consent.js";
+export * from "./propose-cart.js";

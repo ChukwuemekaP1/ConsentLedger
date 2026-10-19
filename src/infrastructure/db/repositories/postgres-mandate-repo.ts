@@ -55,6 +55,49 @@ export class PostgresMandateRepo implements MandateRepo {
     await this.db.execute(sql`SELECT id FROM mandates WHERE id = ${id} FOR UPDATE;`);
   }
 
+  async createMandate(mandate: {
+    id: string;
+    kind: "CART" | "INTENT";
+    correlationId: string;
+    principalId: string;
+    agentId: string;
+    terms: StoredMandateRecord["terms"];
+    hash: string;
+    attestations: StoredMandateRecord["attestations"];
+    status: string;
+    expiresAt: string;
+    createdAt: string;
+  }): Promise<StoredMandateRecord> {
+    const rows = await this.db
+      .insert(mandates)
+      .values({
+        id: mandate.id,
+        kind: mandate.kind,
+        correlationId: mandate.correlationId,
+        principalId: mandate.principalId,
+        agentId: mandate.agentId,
+        terms: mandate.terms,
+        hash: mandate.hash,
+        attestations: mandate.attestations as unknown as Attestation[],
+        status: mandate.status,
+        expiresAt: mandate.expiresAt,
+        createdAt: mandate.createdAt,
+      })
+      .returning();
+
+    const row = rows[0];
+    if (!row) {
+      throw new Error("Failed to insert mandate: no row returned");
+    }
+
+    return {
+      terms: row.terms as CartMandateTerms | IntentMandateTerms,
+      hash: row.hash,
+      attestations: row.attestations as readonly Attestation[],
+      status: row.status,
+    };
+  }
+
   async updateMandateStatus(id: string, status: string): Promise<void> {
     await this.db.update(mandates).set({ status }).where(eq(mandates.id, id));
   }

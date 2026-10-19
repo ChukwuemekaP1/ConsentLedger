@@ -25,7 +25,20 @@ export interface MandateRepo {
   findMandateByHash(hash: string): Promise<StoredMandateRecord | null>;
   lockMandate(id: string): Promise<void>;
 
-  // Status transitions
+  // Creation & status transitions
+  createMandate(mandate: {
+    id: string;
+    kind: "CART" | "INTENT";
+    correlationId: string;
+    principalId: string;
+    agentId: string;
+    terms: StoredMandateRecord["terms"];
+    hash: string;
+    attestations: StoredMandateRecord["attestations"];
+    status: string;
+    expiresAt: string;
+    createdAt: string;
+  }): Promise<StoredMandateRecord>;
   updateMandateStatus(id: string, status: string): Promise<void>;
 
   // Policies

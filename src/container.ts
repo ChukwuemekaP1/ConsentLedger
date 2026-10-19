@@ -27,14 +27,24 @@ import { GenerateRegistrationOptionsUseCase } from "./application/usecases/gener
 import { RegisterPasskeyUseCase } from "./application/usecases/register-passkey.js";
 import { GenerateConsentOptionsUseCase } from "./application/usecases/generate-consent-options.js";
 import { RecordConsentUseCase } from "./application/usecases/record-consent.js";
+import { ProposeCartUseCase, type AuthorityKeyPair } from "./application/usecases/propose-cart.js";
 import { SimpleWebAuthnAdapter } from "./infrastructure/webauthn/simplewebauthn-adapter.js";
 import { SessionService } from "./infrastructure/auth/session.js";
-import { keyId, importPublicKeySpkiBase64 } from "./domain/crypto/signing.js";
+import {
+  keyId,
+  importPublicKeySpkiBase64,
+  importPrivateKeyPkcs8Base64,
+} from "./domain/crypto/signing.js";
+import { FixtureCatalog } from "./infrastructure/catalog/fixture-catalog.js";
+import { GeminiLlmClient } from "./infrastructure/llm/gemini-adapter.js";
+import { FakeLlmClient } from "./infrastructure/llm/fake-llm-client.js";
 import type { UnitOfWork } from "./application/ports/unit-of-work.js";
 import type { LedgerRepo } from "./application/ports/ledger-repo.js";
 import type { PasskeyRepo } from "./application/ports/passkey-repo.js";
 import type { MandateRepo } from "./application/ports/mandate-repo.js";
 import type { WebAuthnRegistrationPort } from "./application/ports/webauthn-port.js";
+import type { ProductCatalog } from "./application/ports/catalog-port.js";
+import type { LlmClient } from "./application/ports/propose-port.js";
 
 // ─── Singleton adapters ───────────────────────────────────────────────────────
 
@@ -45,10 +55,15 @@ const webauthnAdapter = new SimpleWebAuthnAdapter();
 let sessionServiceInstance: SessionService | undefined;
 function getSessionService(): SessionService {
   if (!sessionServiceInstance) {
-    if (!config.SESSION_SECRET) {
+    const secret =
+      config.SESSION_SECRET ??
+      (config.NODE_ENV === "test"
+        ? "test-session-secret-must-be-at-least-32-chars-long"
+        : undefined);
+    if (!secret) {
       throw new Error("SESSION_SECRET is not configured");
     }
-    sessionServiceInstance = new SessionService(config.SESSION_SECRET);
+    sessionServiceInstance = new SessionService(secret);
   }
   return sessionServiceInstance;
 }
@@ -85,7 +100,11 @@ function getPasskeyRepo(): PasskeyRepo {
   }
   return new PostgresPasskeyRepo(client.db);
 }
+let mandateRepoInstance: MandateRepo | undefined;
 function getMandateRepo(): MandateRepo {
+  if (mandateRepoInstance) {
+    return mandateRepoInstance;
+  }
   const client = getDbClient();
   if (!client) {
     throw new Error("DATABASE_URL is not configured; MandateRepo cannot be initialized");
@@ -110,6 +129,42 @@ function getTrustedKeys(): Map<string, { role: "AUTHORITY" | "MERCHANT"; publicK
   return map;
 }
 
+let catalogInstance: ProductCatalog | undefined;
+function getCatalog(): ProductCatalog {
+  if (!catalogInstance) {
+    catalogInstance = new FixtureCatalog();
+  }
+  return catalogInstance;
+}
+
+let llmClientInstance: LlmClient | undefined;
+function getLlmClient(): LlmClient {
+  if (!llmClientInstance) {
+    if (config.LLM_MODE === "live" && config.GEMINI_API_KEY) {
+      llmClientInstance = new GeminiLlmClient(config.GEMINI_API_KEY, config.GEMINI_MODEL);
+    } else {
+      llmClientInstance = new FakeLlmClient();
+    }
+  }
+  return llmClientInstance;
+}
+
+let authorityKeyPairInstance: AuthorityKeyPair | undefined;
+function getAuthorityKeyPair(): AuthorityKeyPair | undefined {
+  if (
+    !authorityKeyPairInstance &&
+    config.AUTHORITY_PRIVATE_KEY_B64 &&
+    config.AUTHORITY_PUBLIC_KEY_B64
+  ) {
+    const priv = importPrivateKeyPkcs8Base64(config.AUTHORITY_PRIVATE_KEY_B64);
+    const pub = importPublicKeySpkiBase64(config.AUTHORITY_PUBLIC_KEY_B64);
+    if (priv.ok && pub.ok) {
+      authorityKeyPairInstance = { privateKey: priv.value, publicKey: pub.value };
+    }
+  }
+  return authorityKeyPairInstance;
+}
+
 // ─── Container ────────────────────────────────────────────────────────────────
 
 /**
@@ -129,7 +184,13 @@ export const container = {
   getLedgerRepo,
   getPasskeyRepo,
   getMandateRepo,
+  setMandateRepo: (repo: MandateRepo) => {
+    mandateRepoInstance = repo;
+  },
   getTrustedKeys,
+  getCatalog,
+  getLlmClient,
+  getAuthorityKeyPair,
   getAppendLedgerEvent: (uow?: UnitOfWork) =>
     new AppendLedgerEvent(clock, idGenerator, uow ?? getUnitOfWork()),
   getVerifyLedger: (repo?: LedgerRepo) => new VerifyLedger(repo ?? getLedgerRepo()),
@@ -172,6 +233,25 @@ export const container = {
       idGenerator,
       passkeyRepo ?? getPasskeyRepo(),
       mandateRepo ?? getMandateRepo(),
+      appendLedgerEvent ??
+        (config.DATABASE_URL
+          ? new AppendLedgerEvent(clock, idGenerator, getUnitOfWork())
+          : undefined),
+    ),
+  getProposeCart: (
+    llmClient?: LlmClient,
+    catalog?: ProductCatalog,
+    mandateRepo?: MandateRepo,
+    authorityKeyPair?: AuthorityKeyPair,
+    appendLedgerEvent?: AppendLedgerEvent,
+  ) =>
+    new ProposeCartUseCase(
+      clock,
+      idGenerator,
+      llmClient ?? getLlmClient(),
+      catalog ?? getCatalog(),
+      mandateRepo ?? getMandateRepo(),
+      authorityKeyPair ?? getAuthorityKeyPair(),
       appendLedgerEvent ??
         (config.DATABASE_URL
           ? new AppendLedgerEvent(clock, idGenerator, getUnitOfWork())
