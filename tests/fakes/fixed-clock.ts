@@ -22,4 +22,9 @@ export class FixedClock implements Clock {
   now(): Timestamp {
     return this._timestamp;
   }
+
+  offsetSeconds(seconds: number): Timestamp {
+    const ms = new Date(this._timestamp).getTime() + seconds * 1000;
+    return new Date(ms).toISOString() as Timestamp;
+  }
 }

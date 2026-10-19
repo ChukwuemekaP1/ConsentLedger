@@ -14,3 +14,4 @@ export * from "./payment-mandates.js";
 export * from "./ledger-events.js";
 export * from "./checkpoints.js";
 export * from "./webhooks.js";
+export * from "./passkeys.js";

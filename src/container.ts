@@ -20,13 +20,32 @@ import { PostgresUnitOfWork } from "./infrastructure/db/unit-of-work.js";
 import { PostgresLedgerRepo } from "./infrastructure/db/repositories/postgres-ledger-repo.js";
 import { AppendLedgerEvent } from "./application/usecases/append-ledger-event.js";
 import { VerifyLedger } from "./application/usecases/verify-ledger.js";
+import { PostgresPasskeyRepo } from "./infrastructure/db/repositories/postgres-passkey-repo.js";
+import { SimpleWebAuthnAdapter } from "./infrastructure/webauthn/simplewebauthn-adapter.js";
+import { SessionService } from "./infrastructure/auth/session.js";
+import { GenerateRegistrationOptionsUseCase } from "./application/usecases/generate-registration-options.js";
+import { RegisterPasskeyUseCase } from "./application/usecases/register-passkey.js";
 import type { UnitOfWork } from "./application/ports/unit-of-work.js";
 import type { LedgerRepo } from "./application/ports/ledger-repo.js";
+import type { PasskeyRepo } from "./application/ports/passkey-repo.js";
+import type { WebAuthnRegistrationPort } from "./application/ports/webauthn-port.js";
 
 // ─── Singleton adapters ───────────────────────────────────────────────────────
 
 const clock = new SystemClock();
 const idGenerator = new CryptoIdGenerator();
+const webauthnAdapter = new SimpleWebAuthnAdapter();
+
+let sessionServiceInstance: SessionService | undefined;
+function getSessionService(): SessionService {
+  if (!sessionServiceInstance) {
+    if (!config.SESSION_SECRET) {
+      throw new Error("SESSION_SECRET is not configured");
+    }
+    sessionServiceInstance = new SessionService(config.SESSION_SECRET);
+  }
+  return sessionServiceInstance;
+}
 
 let dbClientInstance: ReturnType<typeof createDatabaseClient> | undefined;
 
@@ -53,6 +72,14 @@ function getLedgerRepo(): LedgerRepo {
   return new PostgresLedgerRepo(client.db);
 }
 
+function getPasskeyRepo(): PasskeyRepo {
+  const client = getDbClient();
+  if (!client) {
+    throw new Error("DATABASE_URL is not configured; PasskeyRepo cannot be initialized");
+  }
+  return new PostgresPasskeyRepo(client.db);
+}
+
 // ─── Container ────────────────────────────────────────────────────────────────
 
 /**
@@ -65,12 +92,37 @@ export const container = {
   childLogger,
   clock,
   idGenerator,
+  webauthnAdapter,
+  getSessionService,
   getDbClient,
   getUnitOfWork,
   getLedgerRepo,
+  getPasskeyRepo,
   getAppendLedgerEvent: (uow?: UnitOfWork) =>
     new AppendLedgerEvent(clock, idGenerator, uow ?? getUnitOfWork()),
   getVerifyLedger: (repo?: LedgerRepo) => new VerifyLedger(repo ?? getLedgerRepo()),
+  getGenerateRegistrationOptions: (repo?: PasskeyRepo, webauthn?: WebAuthnRegistrationPort) =>
+    new GenerateRegistrationOptionsUseCase(
+      clock,
+      idGenerator,
+      webauthn ?? webauthnAdapter,
+      repo ?? getPasskeyRepo(),
+    ),
+  getRegisterPasskey: (
+    repo?: PasskeyRepo,
+    webauthn?: WebAuthnRegistrationPort,
+    appendLedgerEvent?: AppendLedgerEvent,
+  ) =>
+    new RegisterPasskeyUseCase(
+      clock,
+      idGenerator,
+      webauthn ?? webauthnAdapter,
+      repo ?? getPasskeyRepo(),
+      appendLedgerEvent ??
+        (config.DATABASE_URL
+          ? new AppendLedgerEvent(clock, idGenerator, getUnitOfWork())
+          : undefined),
+    ),
 } as const;
 
 export type Container = typeof container;

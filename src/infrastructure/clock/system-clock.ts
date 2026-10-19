@@ -12,4 +12,8 @@ export class SystemClock implements Clock {
   now(): Timestamp {
     return new Date().toISOString() as Timestamp;
   }
+
+  offsetSeconds(seconds: number): Timestamp {
+    return new Date(Date.now() + seconds * 1000).toISOString() as Timestamp;
+  }
 }

@@ -28,6 +28,7 @@
     "verify": "pnpm typecheck && pnpm lint && pnpm arch && pnpm test:unit && node scripts/verify-int.mjs && pnpm build"
   },
   "dependencies": {
+    "@simplewebauthn/server": "^14.0.3",
     "drizzle-orm": "^0.45.4",
     "next": "16.4.0",
     "pino": "10.4.0",

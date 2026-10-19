@@ -27,6 +27,9 @@ export type Uuid = Brand<string, "Uuid">;
 export interface Clock {
   /** Returns the current time as a branded Timestamp (ISO-8601 UTC). */
   now(): Timestamp;
+
+  /** Returns an ISO-8601 UTC timestamp offset by seconds from now. */
+  offsetSeconds(seconds: number): Timestamp;
 }
 
 /**
