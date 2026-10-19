@@ -40,7 +40,7 @@ module.exports = {
       severity: "error",
       from: { path: "^src/application" },
       to: {
-        path: "^src/(infrastructure|interface|app|ui)",
+        path: "^src/(infrastructure|interface|app/|ui)",
       },
     },
 
@@ -53,7 +53,7 @@ module.exports = {
       severity: "error",
       from: { path: "^src/infrastructure" },
       to: {
-        path: "^src/(interface|app|ui)",
+        path: "^src/(interface|app/|ui)",
       },
     },
 
@@ -76,7 +76,7 @@ module.exports = {
       name: "app-imports-infrastructure",
       comment: "app and ui must not import infrastructure. Use interface or application types.",
       severity: "error",
-      from: { path: "^src/(app|ui)" },
+      from: { path: "^src/(app/|ui)" },
       to: {
         path: "^src/infrastructure",
       },

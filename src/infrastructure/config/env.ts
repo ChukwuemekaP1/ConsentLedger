@@ -43,8 +43,8 @@ const requiredNowSchema = z.object({
  * Each is optional here with a note about which issue promotes it.
  */
 const optionalNowSchema = z.object({
-  // ── Issue #3: Postgres ──────────────────────────────────────────────────
   DATABASE_URL: z.string().url().optional(),
+  DATABASE_ADMIN_URL: z.string().url().optional(),
 
   // ── Issue #4: WebAuthn ─────────────────────────────────────────────────
   WEBAUTHN_RP_ID: z.string().optional(),

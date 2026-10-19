@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1792405979415,
+      "tag": "0000_living_sir_ram",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792406005402,
+      "tag": "0001_immutability_triggers",
+      "breakpoints": true
+    }
+  ]
+}
