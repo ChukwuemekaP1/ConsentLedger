@@ -18,6 +18,10 @@ export interface ProductItem {
   readonly merchantDisplayName: string;
   readonly priceMinor: number;
   readonly currency: Currency;
+  readonly imageUrl?: string;
+  readonly buyUrl?: string;
+  readonly source?: "channel3" | "fixture" | "merchant";
+  readonly brand?: string;
 }
 
 export interface SearchProductsOptions {

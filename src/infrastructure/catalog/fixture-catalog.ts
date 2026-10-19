@@ -24,6 +24,7 @@ export const FIXTURE_PRODUCTS: readonly ProductItem[] = [
     merchantDisplayName: "ShopX",
     priceMinor: 8500, // $85.00
     currency: "USD",
+    source: "fixture",
   },
   {
     id: "prod-kc-pbt",
@@ -34,6 +35,7 @@ export const FIXTURE_PRODUCTS: readonly ProductItem[] = [
     merchantDisplayName: "ShopX",
     priceMinor: 2500, // $25.00
     currency: "USD",
+    source: "fixture",
   },
   {
     id: "prod-wr-oak",
@@ -44,6 +46,7 @@ export const FIXTURE_PRODUCTS: readonly ProductItem[] = [
     merchantDisplayName: "ShopX",
     priceMinor: 2000, // $20.00
     currency: "USD",
+    source: "fixture",
   },
 
   // Merchant: CloudCo
@@ -56,6 +59,7 @@ export const FIXTURE_PRODUCTS: readonly ProductItem[] = [
     merchantDisplayName: "CloudCo",
     priceMinor: 10000, // $100.00
     currency: "USD",
+    source: "fixture",
   },
   {
     id: "prod-cc-50",
@@ -66,6 +70,7 @@ export const FIXTURE_PRODUCTS: readonly ProductItem[] = [
     merchantDisplayName: "CloudCo",
     priceMinor: 5000, // $50.00
     currency: "USD",
+    source: "fixture",
   },
   {
     id: "prod-cc-20",
@@ -76,6 +81,7 @@ export const FIXTURE_PRODUCTS: readonly ProductItem[] = [
     merchantDisplayName: "CloudCo",
     priceMinor: 2000, // $20.00
     currency: "USD",
+    source: "fixture",
   },
 
   // Merchant: Coffee Works
@@ -88,6 +94,7 @@ export const FIXTURE_PRODUCTS: readonly ProductItem[] = [
     merchantDisplayName: "Coffee Works",
     priceMinor: 2400, // $24.00
     currency: "USD",
+    source: "fixture",
   },
   {
     id: "prod-cf-col",
@@ -98,6 +105,7 @@ export const FIXTURE_PRODUCTS: readonly ProductItem[] = [
     merchantDisplayName: "Coffee Works",
     priceMinor: 2200, // $22.00
     currency: "USD",
+    source: "fixture",
   },
   {
     id: "prod-cf-mug",
@@ -108,6 +116,7 @@ export const FIXTURE_PRODUCTS: readonly ProductItem[] = [
     merchantDisplayName: "Coffee Works",
     priceMinor: 1500, // $15.00
     currency: "USD",
+    source: "fixture",
   },
 
   // Merchant: Office Plus
@@ -120,6 +129,7 @@ export const FIXTURE_PRODUCTS: readonly ProductItem[] = [
     merchantDisplayName: "Office Plus",
     priceMinor: 3000, // $30.00
     currency: "USD",
+    source: "fixture",
   },
   {
     id: "prod-op-mon-arm",
@@ -130,6 +140,7 @@ export const FIXTURE_PRODUCTS: readonly ProductItem[] = [
     merchantDisplayName: "Office Plus",
     priceMinor: 6500, // $65.00
     currency: "USD",
+    source: "fixture",
   },
   {
     id: "prod-op-cable-org",
@@ -140,6 +151,7 @@ export const FIXTURE_PRODUCTS: readonly ProductItem[] = [
     merchantDisplayName: "Office Plus",
     priceMinor: 1800, // $18.00
     currency: "USD",
+    source: "fixture",
   },
 ];
 

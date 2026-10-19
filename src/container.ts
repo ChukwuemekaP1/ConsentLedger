@@ -36,6 +36,7 @@ import {
   importPrivateKeyPkcs8Base64,
 } from "./domain/crypto/signing.js";
 import { FixtureCatalog } from "./infrastructure/catalog/fixture-catalog.js";
+import { Channel3Catalog } from "./infrastructure/catalog/channel3-catalog.js";
 import { GeminiLlmClient } from "./infrastructure/llm/gemini-adapter.js";
 import { FakeLlmClient } from "./infrastructure/llm/fake-llm-client.js";
 import type { UnitOfWork } from "./application/ports/unit-of-work.js";
@@ -132,7 +133,13 @@ function getTrustedKeys(): Map<string, { role: "AUTHORITY" | "MERCHANT"; publicK
 let catalogInstance: ProductCatalog | undefined;
 function getCatalog(): ProductCatalog {
   if (!catalogInstance) {
-    catalogInstance = new FixtureCatalog();
+    if (config.CATALOG_MODE === "channel3" && config.CHANNEL3_API_KEY) {
+      catalogInstance = new Channel3Catalog(config.CHANNEL3_API_KEY, {
+        fallbackCatalog: new FixtureCatalog(),
+      });
+    } else {
+      catalogInstance = new FixtureCatalog();
+    }
   }
   return catalogInstance;
 }
@@ -186,6 +193,9 @@ export const container = {
   getMandateRepo,
   setMandateRepo: (repo: MandateRepo) => {
     mandateRepoInstance = repo;
+  },
+  setCatalog: (catalog: ProductCatalog) => {
+    catalogInstance = catalog;
   },
   getTrustedKeys,
   getCatalog,
