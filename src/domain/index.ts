@@ -9,3 +9,4 @@ export * from "./policy/index.js";
 export * from "./state/index.js";
 export * from "./gate/index.js";
 export * from "./ledger/index.js";
+export * from "./evidence/index.js";

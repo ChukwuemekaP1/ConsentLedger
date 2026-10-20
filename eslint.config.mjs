@@ -117,9 +117,17 @@ export default [
     },
   },
 
-  // ─── Scripts — allow console.* ───────────────────────────────────────────────
+  // ─── TypeScript scripts (scripts/**/*.ts) ────────────────────────────────────
   {
-    files: SCRIPT_PATHS,
+    files: ["scripts/**/*.ts"],
+    languageOptions: TS_PARSER_OPTS,
+    plugins: { "@typescript-eslint": tseslint },
+    rules: { "no-console": "off" },
+  },
+
+  // ─── Scripts & JS tooling — allow console.* ─────────────────────────────────
+  {
+    files: ["scripts/**/*.{js,mjs}", "tests/fixtures/**/*"],
     rules: { "no-console": "off" },
   },
 

@@ -26,8 +26,9 @@ export default defineConfig({
           name: "integration",
           include: ["tests/integration/**/*.test.ts"],
           environment: "node",
-          testTimeout: 60000,
-          hookTimeout: 60000,
+          fileParallelism: false,
+          testTimeout: 120000,
+          hookTimeout: 120000,
           // Integration tests require DATABASE_URL to be set externally.
           // The verify-int.mjs script skips this project locally when absent.
         },

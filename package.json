@@ -24,7 +24,7 @@
     "db:down": "docker compose down",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "verify:bundle": "node -e \"console.error('\\n  verify:bundle is not implemented until issue #12 (Evidence Bundle and Offline Verifier).\\n  Usage: pnpm verify:bundle <bundle.json>\\n'); process.exit(1);\"",
+    "verify:bundle": "tsx scripts/verify-bundle.ts",
     "verify": "pnpm typecheck && pnpm lint && pnpm arch && pnpm test:unit && node scripts/verify-int.mjs && pnpm build"
   },
   "dependencies": {
@@ -51,6 +51,7 @@
     "fast-check": "4.10.2",
     "prettier": "3.9.10",
     "tailwindcss": "4.3.3",
+    "tsx": "^4.23.15",
     "typescript": "6.0.3",
     "vitest": "5.0.3"
   }

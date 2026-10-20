@@ -13,3 +13,4 @@ export * from "./create-order.js";
 export * from "./capture-order.js";
 export * from "./process-webhook.js";
 export * from "./reconcile-payment.js";
+export * from "./build-evidence-bundle.js";
