@@ -7,9 +7,15 @@
  */
 
 import type { LedgerRepo } from "./ledger-repo.js";
+import type { MandateRepo } from "./mandate-repo.js";
+import type { PaymentMandateRepo } from "./payment-mandate-repo.js";
+import type { WebhookRepo } from "./webhook-repo.js";
 
 export interface TxContext {
   readonly ledger: LedgerRepo;
+  readonly mandates?: MandateRepo;
+  readonly paymentMandates?: PaymentMandateRepo;
+  readonly webhooks?: WebhookRepo;
 }
 
 export interface UnitOfWork {

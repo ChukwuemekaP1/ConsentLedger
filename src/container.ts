@@ -21,6 +21,8 @@ import { PostgresUnitOfWork } from "./infrastructure/db/unit-of-work.js";
 import { PostgresLedgerRepo } from "./infrastructure/db/repositories/postgres-ledger-repo.js";
 import { PostgresPasskeyRepo } from "./infrastructure/db/repositories/postgres-passkey-repo.js";
 import { PostgresMandateRepo } from "./infrastructure/db/repositories/postgres-mandate-repo.js";
+import { PostgresPaymentMandateRepo } from "./infrastructure/db/repositories/postgres-payment-mandate-repo.js";
+import { PostgresWebhookRepo } from "./infrastructure/db/repositories/postgres-webhook-repo.js";
 import { AppendLedgerEvent } from "./application/usecases/append-ledger-event.js";
 import { VerifyLedger } from "./application/usecases/verify-ledger.js";
 import { GenerateRegistrationOptionsUseCase } from "./application/usecases/generate-registration-options.js";
@@ -28,6 +30,10 @@ import { RegisterPasskeyUseCase } from "./application/usecases/register-passkey.
 import { GenerateConsentOptionsUseCase } from "./application/usecases/generate-consent-options.js";
 import { RecordConsentUseCase } from "./application/usecases/record-consent.js";
 import { ProposeCartUseCase, type AuthorityKeyPair } from "./application/usecases/propose-cart.js";
+import { CreateOrderUseCase } from "./application/usecases/create-order.js";
+import { CaptureOrderUseCase } from "./application/usecases/capture-order.js";
+import { ProcessWebhookUseCase } from "./application/usecases/process-webhook.js";
+import { ReconcilePaymentUseCase } from "./application/usecases/reconcile-payment.js";
 import { SimpleWebAuthnAdapter } from "./infrastructure/webauthn/simplewebauthn-adapter.js";
 import { SessionService } from "./infrastructure/auth/session.js";
 import {
@@ -39,10 +45,15 @@ import { FixtureCatalog } from "./infrastructure/catalog/fixture-catalog.js";
 import { Channel3Catalog } from "./infrastructure/catalog/channel3-catalog.js";
 import { GeminiLlmClient } from "./infrastructure/llm/gemini-adapter.js";
 import { FakeLlmClient } from "./infrastructure/llm/fake-llm-client.js";
+import { PayPalAdapter } from "./infrastructure/paypal/paypal-adapter.js";
+import { FakePaymentProvider } from "./infrastructure/paypal/fake-payment-provider.js";
 import type { UnitOfWork } from "./application/ports/unit-of-work.js";
 import type { LedgerRepo } from "./application/ports/ledger-repo.js";
 import type { PasskeyRepo } from "./application/ports/passkey-repo.js";
 import type { MandateRepo } from "./application/ports/mandate-repo.js";
+import type { PaymentMandateRepo } from "./application/ports/payment-mandate-repo.js";
+import type { WebhookRepo } from "./application/ports/webhook-repo.js";
+import type { PaymentProvider } from "./application/ports/payment-provider.js";
 import type { WebAuthnRegistrationPort } from "./application/ports/webauthn-port.js";
 import type { ProductCatalog } from "./application/ports/catalog-port.js";
 import type { LlmClient } from "./application/ports/propose-port.js";
@@ -113,7 +124,12 @@ function getMandateRepo(): MandateRepo {
   return new PostgresMandateRepo(client.db);
 }
 
+let trustedKeysInstance:
+  Map<string, { role: "AUTHORITY" | "MERCHANT"; publicKey: KeyObject }> | undefined;
 function getTrustedKeys(): Map<string, { role: "AUTHORITY" | "MERCHANT"; publicKey: KeyObject }> {
+  if (trustedKeysInstance) {
+    return trustedKeysInstance;
+  }
   const map = new Map<string, { role: "AUTHORITY" | "MERCHANT"; publicKey: KeyObject }>();
   if (config.AUTHORITY_PUBLIC_KEY_B64) {
     const pub = importPublicKeySpkiBase64(config.AUTHORITY_PUBLIC_KEY_B64);
@@ -172,6 +188,51 @@ function getAuthorityKeyPair(): AuthorityKeyPair | undefined {
   return authorityKeyPairInstance;
 }
 
+let paymentMandateRepoInstance: PaymentMandateRepo | undefined;
+function getPaymentMandateRepo(): PaymentMandateRepo {
+  if (paymentMandateRepoInstance) {
+    return paymentMandateRepoInstance;
+  }
+  const client = getDbClient();
+  if (!client) {
+    throw new Error("DATABASE_URL is not configured; PaymentMandateRepo cannot be initialized");
+  }
+  return new PostgresPaymentMandateRepo(client.db);
+}
+
+let webhookRepoInstance: WebhookRepo | undefined;
+let webhookIdOverride: string | undefined = undefined;
+function getWebhookRepo(): WebhookRepo {
+  if (webhookRepoInstance) {
+    return webhookRepoInstance;
+  }
+  const client = getDbClient();
+  if (!client) {
+    throw new Error("DATABASE_URL is not configured; WebhookRepo cannot be initialized");
+  }
+  return new PostgresWebhookRepo(client.db);
+}
+
+let paymentProviderInstance: PaymentProvider | undefined;
+function getPaymentProvider(): PaymentProvider {
+  if (!paymentProviderInstance) {
+    if (
+      config.SETTLEMENT_MODE === "paypal" &&
+      config.PAYPAL_CLIENT_ID &&
+      config.PAYPAL_CLIENT_SECRET
+    ) {
+      paymentProviderInstance = new PayPalAdapter({
+        clientId: config.PAYPAL_CLIENT_ID,
+        clientSecret: config.PAYPAL_CLIENT_SECRET,
+        env: config.PAYPAL_ENV,
+      });
+    } else {
+      paymentProviderInstance = new FakePaymentProvider();
+    }
+  }
+  return paymentProviderInstance;
+}
+
 // ─── Container ────────────────────────────────────────────────────────────────
 
 /**
@@ -194,13 +255,34 @@ export const container = {
   setMandateRepo: (repo: MandateRepo) => {
     mandateRepoInstance = repo;
   },
+  getPaymentMandateRepo,
+  setPaymentMandateRepo: (repo: PaymentMandateRepo) => {
+    paymentMandateRepoInstance = repo;
+  },
+  getWebhookRepo,
+  setWebhookRepo: (repo: WebhookRepo) => {
+    webhookRepoInstance = repo;
+  },
+  setWebhookId: (id?: string) => {
+    webhookIdOverride = id;
+  },
+  getPaymentProvider,
+  setPaymentProvider: (provider: PaymentProvider) => {
+    paymentProviderInstance = provider;
+  },
   setCatalog: (catalog: ProductCatalog) => {
     catalogInstance = catalog;
   },
   getTrustedKeys,
+  setTrustedKeys: (keys: Map<string, { role: "AUTHORITY" | "MERCHANT"; publicKey: KeyObject }>) => {
+    trustedKeysInstance = keys;
+  },
   getCatalog,
   getLlmClient,
   getAuthorityKeyPair,
+  setAuthorityKeyPair: (pair: AuthorityKeyPair) => {
+    authorityKeyPairInstance = pair;
+  },
   getAppendLedgerEvent: (uow?: UnitOfWork) =>
     new AppendLedgerEvent(clock, idGenerator, uow ?? getUnitOfWork()),
   getVerifyLedger: (repo?: LedgerRepo) => new VerifyLedger(repo ?? getLedgerRepo()),
@@ -262,6 +344,93 @@ export const container = {
       catalog ?? getCatalog(),
       mandateRepo ?? getMandateRepo(),
       authorityKeyPair ?? getAuthorityKeyPair(),
+      appendLedgerEvent ??
+        (config.DATABASE_URL
+          ? new AppendLedgerEvent(clock, idGenerator, getUnitOfWork())
+          : undefined),
+    ),
+  getCreateOrder: (
+    mandateRepo?: MandateRepo,
+    paymentMandateRepo?: PaymentMandateRepo,
+    paymentProvider?: PaymentProvider,
+    appendLedgerEvent?: AppendLedgerEvent,
+  ) =>
+    new CreateOrderUseCase(
+      clock,
+      idGenerator,
+      mandateRepo ?? getMandateRepo(),
+      paymentMandateRepo ?? getPaymentMandateRepo(),
+      paymentProvider ?? getPaymentProvider(),
+      getTrustedKeys(),
+      getAuthorityKeyPair(),
+      config.DATABASE_URL ? getPasskeyRepo() : undefined,
+      config.WEBAUTHN_RP_ID && config.WEBAUTHN_ORIGIN
+        ? { rpId: config.WEBAUTHN_RP_ID, origin: config.WEBAUTHN_ORIGIN }
+        : undefined,
+      config.DATABASE_URL ? getUnitOfWork() : undefined,
+      appendLedgerEvent ??
+        (config.DATABASE_URL
+          ? new AppendLedgerEvent(clock, idGenerator, getUnitOfWork())
+          : undefined),
+    ),
+  getCaptureOrder: (
+    mandateRepo?: MandateRepo,
+    paymentMandateRepo?: PaymentMandateRepo,
+    paymentProvider?: PaymentProvider,
+    appendLedgerEvent?: AppendLedgerEvent,
+  ) =>
+    new CaptureOrderUseCase(
+      clock,
+      idGenerator,
+      mandateRepo ?? getMandateRepo(),
+      paymentMandateRepo ?? getPaymentMandateRepo(),
+      paymentProvider ?? getPaymentProvider(),
+      getTrustedKeys(),
+      config.DATABASE_URL ? getPasskeyRepo() : undefined,
+      config.WEBAUTHN_RP_ID && config.WEBAUTHN_ORIGIN
+        ? { rpId: config.WEBAUTHN_RP_ID, origin: config.WEBAUTHN_ORIGIN }
+        : undefined,
+      config.DATABASE_URL ? getUnitOfWork() : undefined,
+      appendLedgerEvent ??
+        (config.DATABASE_URL
+          ? new AppendLedgerEvent(clock, idGenerator, getUnitOfWork())
+          : undefined),
+    ),
+  getProcessWebhook: (
+    webhookRepo?: WebhookRepo,
+    mandateRepo?: MandateRepo,
+    paymentMandateRepo?: PaymentMandateRepo,
+    paymentProvider?: PaymentProvider,
+    appendLedgerEvent?: AppendLedgerEvent,
+    webhookId?: string,
+  ) =>
+    new ProcessWebhookUseCase(
+      clock,
+      idGenerator,
+      webhookRepo ?? getWebhookRepo(),
+      mandateRepo ?? getMandateRepo(),
+      paymentMandateRepo ?? getPaymentMandateRepo(),
+      paymentProvider ?? getPaymentProvider(),
+      webhookId ?? webhookIdOverride ?? config.PAYPAL_WEBHOOK_ID,
+      config.DATABASE_URL ? getUnitOfWork() : undefined,
+      appendLedgerEvent ??
+        (config.DATABASE_URL
+          ? new AppendLedgerEvent(clock, idGenerator, getUnitOfWork())
+          : undefined),
+    ),
+  getReconcilePayment: (
+    mandateRepo?: MandateRepo,
+    paymentMandateRepo?: PaymentMandateRepo,
+    paymentProvider?: PaymentProvider,
+    appendLedgerEvent?: AppendLedgerEvent,
+  ) =>
+    new ReconcilePaymentUseCase(
+      clock,
+      idGenerator,
+      mandateRepo ?? getMandateRepo(),
+      paymentMandateRepo ?? getPaymentMandateRepo(),
+      paymentProvider ?? getPaymentProvider(),
+      config.DATABASE_URL ? getUnitOfWork() : undefined,
       appendLedgerEvent ??
         (config.DATABASE_URL
           ? new AppendLedgerEvent(clock, idGenerator, getUnitOfWork())

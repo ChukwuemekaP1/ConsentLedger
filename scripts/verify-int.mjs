@@ -8,6 +8,14 @@
  */
 import { execSync } from "node:child_process";
 
+if (!process.env["DATABASE_URL"]) {
+  try {
+    process.loadEnvFile(".env.local");
+  } catch {
+    // Ignore if .env.local does not exist
+  }
+}
+
 const isCI = process.env["CI"] === "true";
 const hasDb = Boolean(process.env["DATABASE_URL"]);
 

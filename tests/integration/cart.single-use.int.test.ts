@@ -40,7 +40,7 @@ describe("cart.single-use.int.test", () => {
       correlationId,
       sequence: 1,
       terms: { amountMinor: 5000, currency: "USD" },
-      hash: "1".repeat(64),
+      hash: randomUUID().replace(/-/g, "").repeat(2),
       authoritySignature: "sig1",
       status: "AUTHORIZED",
       requestId: randomUUID(),
@@ -55,13 +55,16 @@ describe("cart.single-use.int.test", () => {
         correlationId,
         sequence: 2,
         terms: { amountMinor: 5000, currency: "USD" },
-        hash: "2".repeat(64),
+        hash: randomUUID().replace(/-/g, "").repeat(2),
         authoritySignature: "sig2",
         status: "AUTHORIZED",
         requestId: randomUUID(),
         createdAt: now,
       }),
-    ).rejects.toThrow(/cart mandates allow sequence = 1 only/i);
+    ).rejects.toSatisfy((err: unknown) => {
+      const e = err as { cause?: { message?: string }; message?: string };
+      return /cart mandates allow sequence = 1 only/i.test(e?.cause?.message || e?.message || "");
+    });
   });
 
   it("rejects duplicate sequence = 1 via unique constraint", async () => {
@@ -82,7 +85,7 @@ describe("cart.single-use.int.test", () => {
       correlationId,
       sequence: 1,
       terms: { amountMinor: 5000 },
-      hash: "3".repeat(64),
+      hash: randomUUID().replace(/-/g, "").repeat(2),
       authoritySignature: "sig3",
       status: "AUTHORIZED",
       requestId: randomUUID(),
@@ -97,12 +100,15 @@ describe("cart.single-use.int.test", () => {
         correlationId,
         sequence: 1,
         terms: { amountMinor: 5000 },
-        hash: "4".repeat(64),
+        hash: randomUUID().replace(/-/g, "").repeat(2),
         authoritySignature: "sig4",
         status: "AUTHORIZED",
         requestId: randomUUID(),
         createdAt: now,
       }),
-    ).rejects.toThrow(/payment_mandates_mandate_seq_idx/i);
+    ).rejects.toSatisfy((err: unknown) => {
+      const e = err as { cause?: { message?: string }; message?: string };
+      return /payment_mandates_mandate_seq_idx/i.test(e?.cause?.message || e?.message || "");
+    });
   });
 });

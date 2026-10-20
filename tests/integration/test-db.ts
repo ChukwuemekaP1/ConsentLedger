@@ -17,7 +17,14 @@ import { PostgresLedgerRepo } from "../../src/infrastructure/db/repositories/pos
 import { principals, agents, mandates } from "../../src/infrastructure/db/schema/index.js";
 
 export function getTestDatabaseUrl(): string {
-  const url = process.env["DATABASE_URL"] || process.env["DATABASE_ADMIN_URL"];
+  if (!process.env["DATABASE_URL"] && !process.env["DATABASE_ADMIN_URL"]) {
+    try {
+      process.loadEnvFile(".env.local");
+    } catch {
+      // Ignore if .env.local does not exist
+    }
+  }
+  const url = process.env["DATABASE_ADMIN_URL"] || process.env["DATABASE_URL"];
   if (!url) {
     throw new Error(
       "DATABASE_URL or DATABASE_ADMIN_URL must be set to run integration tests.\n" +
