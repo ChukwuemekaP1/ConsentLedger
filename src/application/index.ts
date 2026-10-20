@@ -4,3 +4,4 @@
 
 export * from "./ports/index.js";
 export * from "./usecases/index.js";
+export * from "./lab/index.js";

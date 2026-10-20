@@ -34,3 +34,4 @@ export {
 } from "./types.js";
 
 export { verifyEvidenceBundle } from "./verifier.js";
+export { createValidBundleFixture } from "./fixture.js";
