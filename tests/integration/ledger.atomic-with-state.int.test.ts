@@ -48,6 +48,10 @@ describe("ledger.atomic-with-state.int.test", () => {
       expect(res.ok).toBe(true);
 
       // 2. Insert state entity
+      const randomHash = (randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, "")).slice(
+        0,
+        64,
+      );
       await testEnv.db.insert(mandates).values({
         id: mandateId,
         kind: "CART",
@@ -55,7 +59,7 @@ describe("ledger.atomic-with-state.int.test", () => {
         principalId,
         agentId,
         terms: { test: true },
-        hash: "f".repeat(64),
+        hash: randomHash,
         status: "DRAFTED",
         expiresAt: new Date(Date.now() + 600000).toISOString(),
         createdAt: new Date().toISOString(),

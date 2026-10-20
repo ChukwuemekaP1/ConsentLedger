@@ -115,8 +115,8 @@ jobs:
         uses: trufflesecurity/trufflehog@e76dff8a7e57d6df0c60ad8cbf5d5cba505a8fc9
         with:
           path: ./
-          base: ${{ github.event.repository.default_branch }}
-          head: HEAD
+          base: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
+          head: ${{ github.event_name == 'pull_request' && 'HEAD' || '' }}
           extra_args: --debug --only-verified
 
   # ─── Dependency audit (non-blocking, report only) ────────────────────────────

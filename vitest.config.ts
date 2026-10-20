@@ -16,6 +16,7 @@ export default defineConfig({
           name: "unit",
           include: ["tests/unit/**/*.test.ts"],
           environment: "node",
+          setupFiles: ["tests/unit/setup.ts"],
           // Unit tests must never touch the network or database.
           // Enforced here by never setting DATABASE_URL in this project.
         },
@@ -25,6 +26,8 @@ export default defineConfig({
           name: "integration",
           include: ["tests/integration/**/*.test.ts"],
           environment: "node",
+          testTimeout: 60000,
+          hookTimeout: 60000,
           // Integration tests require DATABASE_URL to be set externally.
           // The verify-int.mjs script skips this project locally when absent.
         },

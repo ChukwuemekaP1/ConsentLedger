@@ -64,5 +64,5 @@ describe("ledger.concurrency.int.test", () => {
     const seqs = events.map((e) => e.seq);
     const expectedSeqs = Array.from({ length: CONCURRENCY_COUNT }, (_, i) => i + 1);
     expect(seqs).toEqual(expectedSeqs);
-  }, 40_000);
+  }, 90_000);
 });

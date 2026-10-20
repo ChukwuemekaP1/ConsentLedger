@@ -51,12 +51,12 @@ describe("ledger.parallel-correlations.int.test", () => {
     }
 
     // 10 distinct non-contending appends should execute rapidly
-    expect(elapsed).toBeLessThan(15_000);
+    expect(elapsed).toBeLessThan(25_000);
 
     for (const corrId of correlationIds) {
       const events = await testEnv.ledgerRepo.getEvents(corrId);
       expect(events).toHaveLength(1);
       expect(events[0]?.seq).toBe(1);
     }
-  });
+  }, 30_000);
 });

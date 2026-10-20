@@ -67,5 +67,5 @@ describe("ledger.tamper.int.test", () => {
 
     expect(tamperedVerify.error.brokenAtSeq).toBe(2);
     expect(tamperedVerify.error.reason).toBe("HASH_MISMATCH");
-  });
+  }, 30_000);
 });

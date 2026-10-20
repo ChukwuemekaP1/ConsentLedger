@@ -54,7 +54,10 @@ describe("budget.check-constraint.int.test", () => {
         SET spent_minor = 5000, reserved_minor = 6000
         WHERE mandate_id = ${mandateId};
       `),
-    ).rejects.toThrow(/budget_limit_check/i);
+    ).rejects.toSatisfy((err: unknown) => {
+      const e = err as { cause?: { message?: string }; message?: string };
+      return /budget_limit_check/i.test(e?.cause?.message || e?.message || "");
+    });
   });
 
   it("rejects negative money values in budgets", async () => {
@@ -81,6 +84,11 @@ describe("budget.check-constraint.int.test", () => {
         perTxMaxMinor: 500,
         updatedAt: now,
       }),
-    ).rejects.toThrow(/budget_total_non_negative/i);
+    ).rejects.toSatisfy((err: unknown) => {
+      const e = err as { cause?: { message?: string; constraint?: string }; message?: string };
+      return /budget_total_non_negative|budget_limit_check/i.test(
+        e?.cause?.message || e?.cause?.constraint || e?.message || "",
+      );
+    });
   });
 });

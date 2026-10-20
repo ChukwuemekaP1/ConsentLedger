@@ -14,7 +14,15 @@ import type {
   LedgerEventType,
   LedgerActor,
 } from "../../../domain/ledger/index.js";
+import type { Timestamp } from "../../../domain/shared/clock.js";
 import type { LedgerRepo } from "../../../application/ports/ledger-repo.js";
+
+function normalizeTimestamp(val: string): Timestamp {
+  if (val.includes("T") && val.endsWith("Z")) {
+    return val as Timestamp;
+  }
+  return new Date(val).toISOString() as Timestamp;
+}
 
 export class PostgresLedgerRepo implements LedgerRepo {
   constructor(private readonly db: Database) {}
@@ -82,7 +90,7 @@ export class PostgresLedgerRepo implements LedgerRepo {
       payload: row.payload as Record<string, unknown>,
       prevHash: row.prevHash,
       hash: row.hash,
-      createdAt: row.createdAt,
+      createdAt: normalizeTimestamp(row.createdAt),
     }));
   }
 

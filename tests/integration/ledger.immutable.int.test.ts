@@ -44,7 +44,10 @@ describe("ledger.immutable.int.test", () => {
         SET payload = '{"tampered": true}'::jsonb
         WHERE correlation_id = ${correlationId}
       `),
-    ).rejects.toThrow(/ledger is append-only/i);
+    ).rejects.toSatisfy((err: unknown) => {
+      const e = err as { cause?: { message?: string }; message?: string };
+      return /ledger is append-only/i.test(e?.cause?.message || e?.message || "");
+    });
   });
 
   it("blocks DELETE on ledger_events via database trigger", async () => {
@@ -65,12 +68,18 @@ describe("ledger.immutable.int.test", () => {
         DELETE FROM ledger_events
         WHERE correlation_id = ${correlationId}
       `),
-    ).rejects.toThrow(/ledger is append-only/i);
+    ).rejects.toSatisfy((err: unknown) => {
+      const e = err as { cause?: { message?: string }; message?: string };
+      return /ledger is append-only/i.test(e?.cause?.message || e?.message || "");
+    });
   });
 
   it("blocks TRUNCATE on ledger_events via statement-level trigger", async () => {
-    await expect(testEnv.db.execute(sql`TRUNCATE TABLE ledger_events`)).rejects.toThrow(
-      /ledger is append-only.*TRUNCATE/i,
+    await expect(testEnv.db.execute(sql`TRUNCATE TABLE ledger_events`)).rejects.toSatisfy(
+      (err: unknown) => {
+        const e = err as { cause?: { message?: string }; message?: string };
+        return /ledger is append-only.*TRUNCATE/i.test(e?.cause?.message || e?.message || "");
+      },
     );
   });
 });
