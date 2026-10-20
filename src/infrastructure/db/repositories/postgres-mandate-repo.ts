@@ -8,11 +8,13 @@
 import { eq, and, sql } from "drizzle-orm";
 import type { Database } from "../client.js";
 import { mandates } from "../schema/mandates.js";
+import { agents } from "../schema/agents.js";
 import { policies } from "../schema/policies.js";
 import { mandateConsents } from "../schema/mandate-consents.js";
 import type { MandateRepo, StoredMandateConsent } from "../../../application/ports/mandate-repo.js";
 import type { StoredMandateRecord } from "../../../domain/gate/gate.js";
 import type { PolicyDocument } from "../../../domain/policy/policy.js";
+import { DEFAULT_POLICY_V1 } from "../../../domain/policy/policy.js";
 import type {
   CartMandateTerms,
   IntentMandateTerms,
@@ -68,6 +70,23 @@ export class PostgresMandateRepo implements MandateRepo {
     expiresAt: string;
     createdAt: string;
   }): Promise<StoredMandateRecord> {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      mandate.agentId,
+    );
+    const agentId = isUuid ? mandate.agentId : "00000000-0000-4000-8000-000000000001";
+    if (!isUuid) {
+      await this.db
+        .insert(agents)
+        .values({
+          id: agentId,
+          name: "Gemini Proposal Agent",
+          kind: "builtin-gemini",
+          apiKeyHash: "0".repeat(63) + "1",
+          createdAt: mandate.createdAt,
+        })
+        .onConflictDoNothing();
+    }
+
     const rows = await this.db
       .insert(mandates)
       .values({
@@ -75,7 +94,7 @@ export class PostgresMandateRepo implements MandateRepo {
         kind: mandate.kind,
         correlationId: mandate.correlationId,
         principalId: mandate.principalId,
-        agentId: mandate.agentId,
+        agentId,
         terms: mandate.terms,
         hash: mandate.hash,
         attestations: mandate.attestations as unknown as Attestation[],
@@ -106,7 +125,12 @@ export class PostgresMandateRepo implements MandateRepo {
     const rows = await this.db.select().from(policies).where(eq(policies.id, id)).limit(1);
 
     const row = rows[0];
-    if (!row) return null;
+    if (!row) {
+      if (id === DEFAULT_POLICY_V1.id) {
+        return DEFAULT_POLICY_V1;
+      }
+      return null;
+    }
 
     return row.content as PolicyDocument;
   }
@@ -119,7 +143,12 @@ export class PostgresMandateRepo implements MandateRepo {
       .limit(1);
 
     const row = rows[0];
-    if (!row) return null;
+    if (!row) {
+      if (id === DEFAULT_POLICY_V1.id) {
+        return DEFAULT_POLICY_V1;
+      }
+      return null;
+    }
 
     return row.content as PolicyDocument;
   }

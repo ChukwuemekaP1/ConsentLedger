@@ -48,7 +48,10 @@ export async function POST(request: Request): Promise<Response> {
     // Check existing session
     const cookieHeader = request.headers.get("cookie");
     let authenticatedPrincipalId: string | undefined;
-    if (cookieHeader && container.config.SESSION_SECRET) {
+    if (
+      cookieHeader &&
+      (container.config.SESSION_SECRET || container.config.NODE_ENV !== "production")
+    ) {
       const match = cookieHeader.match(/cl_session=([^;]+)/);
       if (match && match[1]) {
         const sessionResult = container.getSessionService().verify(match[1]);
@@ -103,7 +106,7 @@ export async function POST(request: Request): Promise<Response> {
     const headers = new Headers();
     headers.set("content-type", "application/json; charset=utf-8");
 
-    if (container.config.SESSION_SECRET) {
+    if (container.config.SESSION_SECRET || container.config.NODE_ENV !== "production") {
       const sessionToken = container.getSessionService().sign(result.value.principalId);
       const isProd = container.config.NODE_ENV === "production";
       const secureFlag = isProd ? "; Secure" : "";

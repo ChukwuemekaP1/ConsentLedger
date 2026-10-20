@@ -22,6 +22,21 @@ export default defineConfig({
         },
       },
       {
+        // Component tests: React Testing Library on jsdom. Backend and WebAuthn are faked,
+        // so these are NOT real-WebAuthn tests (see tests/e2e for the virtual authenticator).
+        resolve: {
+          alias: {
+            "@": path.resolve(import.meta.dirname, "./src"),
+          },
+        },
+        test: {
+          name: "ui",
+          include: ["tests/ui/**/*.test.{ts,tsx}"],
+          environment: "jsdom",
+          setupFiles: ["tests/ui/setup.ts"],
+        },
+      },
+      {
         test: {
           name: "integration",
           include: ["tests/integration/**/*.test.ts"],

@@ -69,8 +69,8 @@ function getSessionService(): SessionService {
   if (!sessionServiceInstance) {
     const secret =
       config.SESSION_SECRET ??
-      (config.NODE_ENV === "test"
-        ? "test-session-secret-must-be-at-least-32-chars-long"
+      (config.NODE_ENV !== "production"
+        ? "development-and-test-session-secret-min-32-chars-long"
         : undefined);
     if (!secret) {
       throw new Error("SESSION_SECRET is not configured");
@@ -124,6 +124,12 @@ function getMandateRepo(): MandateRepo {
   return new PostgresMandateRepo(client.db);
 }
 
+const DEV_AUTHORITY_PRIV = "MC4CAQAwBQYDK2VwBCIEIEy31hWiFwSNt3lhskBKfqaaTD1zVr46wKBcZosj5qWK";
+const DEV_AUTHORITY_PUB = "MCowBQYDK2VwAyEAE2vYeJ75z6NKIded1xXZaXxBexp8typoWnPzLROXOdM=";
+
+const DEV_MERCHANT_PRIV = "MC4CAQAwBQYDK2VwBCIEIBKji9baqeE5zi+cATTo/GSk+MWb622PRq+4Doq5gkc8";
+const DEV_MERCHANT_PUB = "MCowBQYDK2VwAyEA4oDGfZy3CBL1HR4GDzPKG5kp83rxddUX7s/cCZF2nQo=";
+
 let trustedKeysInstance:
   Map<string, { role: "AUTHORITY" | "MERCHANT"; publicKey: KeyObject }> | undefined;
 function getTrustedKeys(): Map<string, { role: "AUTHORITY" | "MERCHANT"; publicKey: KeyObject }> {
@@ -131,14 +137,20 @@ function getTrustedKeys(): Map<string, { role: "AUTHORITY" | "MERCHANT"; publicK
     return trustedKeysInstance;
   }
   const map = new Map<string, { role: "AUTHORITY" | "MERCHANT"; publicKey: KeyObject }>();
-  if (config.AUTHORITY_PUBLIC_KEY_B64) {
-    const pub = importPublicKeySpkiBase64(config.AUTHORITY_PUBLIC_KEY_B64);
+  const authorityPubB64 =
+    config.AUTHORITY_PUBLIC_KEY_B64 ??
+    (config.NODE_ENV !== "production" ? DEV_AUTHORITY_PUB : undefined);
+  if (authorityPubB64) {
+    const pub = importPublicKeySpkiBase64(authorityPubB64);
     if (pub.ok) {
       map.set(keyId(pub.value), { role: "AUTHORITY", publicKey: pub.value });
     }
   }
-  if (config.MERCHANT_PUBLIC_KEY_B64) {
-    const pub = importPublicKeySpkiBase64(config.MERCHANT_PUBLIC_KEY_B64);
+  const merchantPubB64 =
+    config.MERCHANT_PUBLIC_KEY_B64 ??
+    (config.NODE_ENV !== "production" ? DEV_MERCHANT_PUB : undefined);
+  if (merchantPubB64) {
+    const pub = importPublicKeySpkiBase64(merchantPubB64);
     if (pub.ok) {
       map.set(keyId(pub.value), { role: "MERCHANT", publicKey: pub.value });
     }
@@ -174,18 +186,42 @@ function getLlmClient(): LlmClient {
 
 let authorityKeyPairInstance: AuthorityKeyPair | undefined;
 function getAuthorityKeyPair(): AuthorityKeyPair | undefined {
-  if (
-    !authorityKeyPairInstance &&
-    config.AUTHORITY_PRIVATE_KEY_B64 &&
-    config.AUTHORITY_PUBLIC_KEY_B64
-  ) {
-    const priv = importPrivateKeyPkcs8Base64(config.AUTHORITY_PRIVATE_KEY_B64);
-    const pub = importPublicKeySpkiBase64(config.AUTHORITY_PUBLIC_KEY_B64);
-    if (priv.ok && pub.ok) {
-      authorityKeyPairInstance = { privateKey: priv.value, publicKey: pub.value };
+  if (!authorityKeyPairInstance) {
+    const privB64 =
+      config.AUTHORITY_PRIVATE_KEY_B64 ??
+      (config.NODE_ENV !== "production" ? DEV_AUTHORITY_PRIV : undefined);
+    const pubB64 =
+      config.AUTHORITY_PUBLIC_KEY_B64 ??
+      (config.NODE_ENV !== "production" ? DEV_AUTHORITY_PUB : undefined);
+    if (privB64 && pubB64) {
+      const priv = importPrivateKeyPkcs8Base64(privB64);
+      const pub = importPublicKeySpkiBase64(pubB64);
+      if (priv.ok && pub.ok) {
+        authorityKeyPairInstance = { privateKey: priv.value, publicKey: pub.value };
+      }
     }
   }
   return authorityKeyPairInstance;
+}
+
+let merchantKeyPairInstance: AuthorityKeyPair | undefined;
+function getMerchantKeyPair(): AuthorityKeyPair | undefined {
+  if (!merchantKeyPairInstance) {
+    const privB64 =
+      config.MERCHANT_PRIVATE_KEY_B64 ??
+      (config.NODE_ENV !== "production" ? DEV_MERCHANT_PRIV : undefined);
+    const pubB64 =
+      config.MERCHANT_PUBLIC_KEY_B64 ??
+      (config.NODE_ENV !== "production" ? DEV_MERCHANT_PUB : undefined);
+    if (privB64 && pubB64) {
+      const priv = importPrivateKeyPkcs8Base64(privB64);
+      const pub = importPublicKeySpkiBase64(pubB64);
+      if (priv.ok && pub.ok) {
+        merchantKeyPairInstance = { privateKey: priv.value, publicKey: pub.value };
+      }
+    }
+  }
+  return merchantKeyPairInstance;
 }
 
 let paymentMandateRepoInstance: PaymentMandateRepo | undefined;
@@ -283,6 +319,10 @@ export const container = {
   setAuthorityKeyPair: (pair: AuthorityKeyPair) => {
     authorityKeyPairInstance = pair;
   },
+  getMerchantKeyPair,
+  setMerchantKeyPair: (pair: AuthorityKeyPair) => {
+    merchantKeyPairInstance = pair;
+  },
   getAppendLedgerEvent: (uow?: UnitOfWork) =>
     new AppendLedgerEvent(clock, idGenerator, uow ?? getUnitOfWork()),
   getVerifyLedger: (repo?: LedgerRepo) => new VerifyLedger(repo ?? getLedgerRepo()),
@@ -336,6 +376,7 @@ export const container = {
     mandateRepo?: MandateRepo,
     authorityKeyPair?: AuthorityKeyPair,
     appendLedgerEvent?: AppendLedgerEvent,
+    merchantKeyPair?: AuthorityKeyPair,
   ) =>
     new ProposeCartUseCase(
       clock,
@@ -348,6 +389,7 @@ export const container = {
         (config.DATABASE_URL
           ? new AppendLedgerEvent(clock, idGenerator, getUnitOfWork())
           : undefined),
+      merchantKeyPair ?? getMerchantKeyPair(),
     ),
   getCreateOrder: (
     mandateRepo?: MandateRepo,

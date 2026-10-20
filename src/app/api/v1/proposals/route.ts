@@ -31,7 +31,10 @@ export async function POST(request: Request): Promise<Response> {
     // 1. Authenticate principal via session cookie
     const cookieHeader = request.headers.get("cookie");
     let authenticatedPrincipalId: string | undefined;
-    if (cookieHeader && (container.config.SESSION_SECRET || container.config.NODE_ENV === "test")) {
+    if (
+      cookieHeader &&
+      (container.config.SESSION_SECRET || container.config.NODE_ENV !== "production")
+    ) {
       const match = cookieHeader.match(/cl_session=([^;]+)/);
       if (match && match[1]) {
         const sessionResult = container.getSessionService().verify(match[1]);

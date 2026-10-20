@@ -21,6 +21,9 @@ export async function GET(request: Request): Promise<Response> {
       clientId,
       currency: "USD",
       environment: container.config.PAYPAL_ENV,
+      // Non-secret mode flags so the UI can label demo data and simulated settlement honestly.
+      settlementMode: container.config.SETTLEMENT_MODE,
+      catalogMode: container.config.CATALOG_MODE,
     },
     {
       status: 200,

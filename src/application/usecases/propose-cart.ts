@@ -69,6 +69,7 @@ export class ProposeCartUseCase {
     private readonly mandateRepo: MandateRepo,
     private readonly authorityKeyPair?: AuthorityKeyPair,
     private readonly appendLedgerEvent?: AppendLedgerEvent,
+    private readonly merchantKeyPair?: AuthorityKeyPair,
   ) {}
 
   async execute(input: ProposeCartInput): Promise<Result<ProposeCartOutput, ProposeCartError>> {
@@ -163,7 +164,7 @@ export class ProposeCartUseCase {
 
     const { terms, hash } = mandateResult.value;
 
-    // 5. Attest Mandate with Authority Key
+    // 5. Attest Mandate with Authority and Merchant Keys
     const attestations: Attestation[] = [];
     if (this.authorityKeyPair) {
       const attestationResult = attestMandate(
@@ -171,6 +172,17 @@ export class ProposeCartUseCase {
         hash as Hash,
         this.authorityKeyPair.privateKey,
         this.authorityKeyPair.publicKey,
+      );
+      if (attestationResult.ok) {
+        attestations.push(attestationResult.value);
+      }
+    }
+    if (this.merchantKeyPair) {
+      const attestationResult = attestMandate(
+        "MERCHANT",
+        hash as Hash,
+        this.merchantKeyPair.privateKey,
+        this.merchantKeyPair.publicKey,
       );
       if (attestationResult.ok) {
         attestations.push(attestationResult.value);

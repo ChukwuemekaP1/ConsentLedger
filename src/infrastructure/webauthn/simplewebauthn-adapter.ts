@@ -33,6 +33,7 @@ export class SimpleWebAuthnAdapter implements WebAuthnRegistrationPort {
         residentKey: "preferred",
         userVerification: "preferred",
       },
+      supportedAlgorithmIDs: [-7, -257],
       ...(excludeCredentials ? { excludeCredentials } : {}),
     });
 

@@ -16,6 +16,11 @@ import type {
   StoredPrincipal,
 } from "../../../application/ports/passkey-repo.js";
 
+function toIso(val: string): string {
+  const d = new Date(val);
+  return Number.isNaN(d.getTime()) ? val : d.toISOString();
+}
+
 export class PostgresPasskeyRepo implements PasskeyRepo {
   constructor(private readonly db: Database) {}
 
@@ -87,8 +92,8 @@ export class PostgresPasskeyRepo implements PasskeyRepo {
       id: row.id,
       challenge: row.challenge,
       purpose: row.purpose as "registration" | "authentication" | "consent",
-      expiresAt: row.expiresAt,
-      createdAt: row.createdAt,
+      expiresAt: toIso(row.expiresAt),
+      createdAt: toIso(row.createdAt),
       ...(row.principalId ? { principalId: row.principalId } : {}),
     };
 
@@ -109,8 +114,8 @@ export class PostgresPasskeyRepo implements PasskeyRepo {
       id: row.id,
       challenge: row.challenge,
       purpose: row.purpose as "registration" | "authentication" | "consent",
-      expiresAt: row.expiresAt,
-      createdAt: row.createdAt,
+      expiresAt: toIso(row.expiresAt),
+      createdAt: toIso(row.createdAt),
       ...(row.principalId ? { principalId: row.principalId } : {}),
     };
 
