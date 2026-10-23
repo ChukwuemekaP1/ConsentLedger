@@ -135,7 +135,10 @@ const SYSTEM_INSTRUCTION = {
         "3. You must use the tools `search_products` and `get_product_details` to find exact items and prices.\n" +
         "4. When ready, you MUST call `propose_cart` with exact integer minor units (e.g. 8500 for $85.00). " +
         "The sum of (quantity * unitAmountMinor) for all items must exactly equal payment.amountMinor.\n" +
-        "5. Never output floating-point currency numbers.",
+        "5. Never output floating-point currency numbers.\n" +
+        "6. RATIONALE & BUYER REASSURANCE: In `propose_cart.rationale`, write a detailed, reassuring buyer analysis: " +
+        "highlight key product specifications, explicitly compare it against lower-quality or overpriced alternatives, " +
+        "and reassure the human buyer why this represents the best value for their designated budget and quality needs.",
     },
   ],
 };

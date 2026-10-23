@@ -36,3 +36,4 @@ export { ReuseConsumedApprovalScenario } from "./scenarios/reuse-consumed-approv
 export { ExpiredMandateScenario } from "./scenarios/expired-mandate.js";
 export { ChangedMandateConsentScenario } from "./scenarios/changed-mandate-consent.js";
 export { EvidenceBundleTamperingScenario } from "./scenarios/evidence-bundle-tampering.js";
+export { createDeterministicLabContext } from "./lab-context-factory.js";

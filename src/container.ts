@@ -57,6 +57,9 @@ import type { PaymentProvider } from "./application/ports/payment-provider.js";
 import type { WebAuthnRegistrationPort } from "./application/ports/webauthn-port.js";
 import type { ProductCatalog } from "./application/ports/catalog-port.js";
 import type { LlmClient } from "./application/ports/propose-port.js";
+import { PostgresDashboardQuery } from "./infrastructure/db/queries/postgres-dashboard-query.js";
+import { SecurityLabRunner, createDeterministicLabContext } from "./application/lab/index.js";
+import type { DashboardQueryPort } from "./application/ports/dashboard-query-port.js";
 
 // ─── Singleton adapters ───────────────────────────────────────────────────────
 
@@ -271,6 +274,8 @@ function getPaymentProvider(): PaymentProvider {
 
 // ─── Container ────────────────────────────────────────────────────────────────
 
+let labEnabledOverride: boolean | undefined = undefined;
+
 /**
  * The application container. Import from here in route handlers and use cases.
  * Never construct adapters anywhere else.
@@ -478,6 +483,17 @@ export const container = {
           ? new AppendLedgerEvent(clock, idGenerator, getUnitOfWork())
           : undefined),
     ),
+  getDashboardQuery: (dbClient?: ReturnType<typeof createDatabaseClient>): DashboardQueryPort => {
+    const client = dbClient ?? getDbClient();
+    return new PostgresDashboardQuery(client?.db);
+  },
+  getSecurityLabRunner: () => new SecurityLabRunner(),
+  createLabContext: () => createDeterministicLabContext(clock, idGenerator),
+  // Lab attack routes are off unless explicitly enabled (fail closed; env.ts LAB_ENABLED).
+  isLabEnabled: (): boolean => labEnabledOverride ?? config.LAB_ENABLED,
+  setLabEnabled: (enabled?: boolean) => {
+    labEnabledOverride = enabled;
+  },
 } as const;
 
 export type Container = typeof container;

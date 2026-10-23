@@ -34,6 +34,7 @@ import {
   type OrderResponse,
   type ProposalResponse,
 } from "./api-schemas.js";
+import type { PolicyDocument } from "../../domain/policy/policy.js";
 
 export type ApiResult<T> =
   { readonly ok: true; readonly value: T } | { readonly ok: false; readonly failure: Failure };
@@ -106,7 +107,7 @@ export interface AgentApi {
     response: RegistrationResponseJSON,
     displayName: string,
   ): Promise<ApiResult<{ principalId: string; credentialId: string }>>;
-  propose(prompt: string): Promise<ApiResult<ProposalResponse>>;
+  propose(prompt: string, policy?: PolicyDocument): Promise<ApiResult<ProposalResponse>>;
   requestConsentOptions(
     mandateId: string,
   ): Promise<ApiResult<PublicKeyCredentialRequestOptionsJSON>>;
@@ -157,8 +158,13 @@ export function createAgentApi(fetchFn: FetchFn): AgentApi {
         : result;
     },
 
-    propose: (prompt) =>
-      call(fetchFn, "/api/v1/proposals", jsonPost({ prompt }), ProposalResponseSchema),
+    propose: (prompt, policy) =>
+      call(
+        fetchFn,
+        "/api/v1/proposals",
+        jsonPost({ prompt, ...(policy !== undefined ? { policy } : {}) }),
+        ProposalResponseSchema,
+      ),
 
     async requestConsentOptions(mandateId) {
       const result = await call(

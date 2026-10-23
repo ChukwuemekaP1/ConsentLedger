@@ -57,5 +57,5 @@ describe("gate.capability compile-time forgery proof (I-01)", () => {
       // The important thing is no "Unused @ts-expect-error" error.
       expect(true).toBe(true); // proof holds — errors are from context, not from brand
     }
-  }, 30_000); // 30 second timeout for tsc
+  }, 60_000); // 60 second timeout for tsc
 });

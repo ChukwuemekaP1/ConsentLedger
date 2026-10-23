@@ -14,11 +14,13 @@ import {
   fromAppError,
   fromUnknown,
 } from "../../../../interface/http/problem.js";
+import { PolicyDocumentSchema } from "../../../../domain/policy/policy.js";
 
 const ProposalRequestBodySchema = z
   .object({
     prompt: z.string().min(1, "Prompt is required"),
     correlationId: z.string().uuid().optional(),
+    policy: PolicyDocumentSchema.optional(),
   })
   .strict();
 
@@ -86,7 +88,7 @@ export async function POST(request: Request): Promise<Response> {
       );
     }
 
-    const { prompt, correlationId } = parseResult.data;
+    const { prompt, correlationId, policy } = parseResult.data;
 
     // 3. Execute ProposeCart use case
     const proposeCart = container.getProposeCart();
@@ -94,6 +96,7 @@ export async function POST(request: Request): Promise<Response> {
       principalId: authenticatedPrincipalId,
       prompt,
       ...(correlationId !== undefined ? { correlationId } : {}),
+      ...(policy !== undefined ? { policy } : {}),
     });
 
     if (!result.ok) {

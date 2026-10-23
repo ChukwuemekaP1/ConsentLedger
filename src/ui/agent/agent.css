@@ -5,6 +5,8 @@
  * coloured state also carries text.
  */
 
+@import "../dashboard/dashboard.css";
+
 .wb {
   --radius-control: 6px;
   --radius-card: 10px;
@@ -546,6 +548,173 @@ textarea.input {
   padding-left: 12px;
   border-left: 3px solid var(--paper-ink);
   font-style: italic;
+}
+
+/* Product visual preview & AI Decision Intelligence on paper mandate */
+.mandate__product-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: rgba(27, 26, 23, 0.04);
+  border: 1px solid rgba(27, 26, 23, 0.14);
+  border-radius: var(--radius-control);
+}
+
+.product-preview__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-control);
+  background: rgba(27, 26, 23, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--paper-ink);
+  flex-shrink: 0;
+}
+
+.product-preview__details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.product-preview__label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  color: #5c584e;
+}
+
+.product-preview__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--paper-ink);
+}
+
+.product-preview__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 12px;
+  color: #4b483f;
+}
+
+.mandate__intelligence {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(11, 79, 168, 0.04);
+  border: 1px solid rgba(11, 79, 168, 0.18);
+  border-left: 3px solid #0b4fa8;
+  border-radius: var(--radius-control);
+}
+
+.intelligence__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.intelligence__title-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.intelligence__badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: #0b4fa8;
+}
+
+.intelligence__sub {
+  font-size: 11px;
+  color: #5c584e;
+}
+
+.intelligence__score {
+  font-size: 12px;
+  color: var(--paper-ink);
+}
+
+.intelligence__score strong {
+  font-size: 13px;
+  color: #0f4a31;
+}
+
+.intelligence__rationale {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--paper-ink);
+}
+
+.intelligence__narrative {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--paper-ink);
+}
+
+.intelligence__reassurance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  padding: 10px;
+  background: rgba(27, 26, 23, 0.035);
+  border: 1px solid rgba(27, 26, 23, 0.1);
+  border-radius: var(--radius-control);
+}
+
+.reassurance__item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.reassurance__badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #0b4fa8;
+  letter-spacing: 0.02em;
+}
+
+.reassurance__text {
+  font-size: 12px;
+  line-height: 1.4;
+  color: #4b483f;
+}
+
+.intelligence__metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(27, 26, 23, 0.15);
+}
+
+.intelligence__metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.metric__label {
+  font-size: 11px;
+  color: #5c584e;
+}
+
+.metric__value {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--paper-ink);
 }
 
 .mandate__facts {

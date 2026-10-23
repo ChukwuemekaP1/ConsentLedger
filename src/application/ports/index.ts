@@ -12,3 +12,4 @@ export * from "./propose-port.js";
 export * from "./payment-provider.js";
 export * from "./payment-mandate-repo.js";
 export * from "./webhook-repo.js";
+export * from "./dashboard-query-port.js";

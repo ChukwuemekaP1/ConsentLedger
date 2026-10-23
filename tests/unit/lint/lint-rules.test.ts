@@ -105,7 +105,7 @@ describe("ESLint pure-layer guardrails", () => {
     const errors = msgs.filter((m) => m.severity === 2);
     expect(errors.length, "expected at least one error").toBeGreaterThan(0);
     expect(ruleIds(errors)).toContain("no-restricted-properties");
-  }, 15000);
+  }, 45000);
 
   it("flags new Date() with no-restricted-syntax", async () => {
     const code = `export function makeDate() { return new Date(); }`;

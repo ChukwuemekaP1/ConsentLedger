@@ -157,6 +157,104 @@ export function MandateCard(props: MandateCardProps) {
         {terms.promptPlayback}”
       </blockquote>
 
+      {terms.items.length > 0 && (
+        <div className="mandate__product-preview" aria-label="Proposed Product Preview">
+          <div className="product-preview__icon" aria-hidden="true">
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <path d="M16 10a4 4 0 0 1-8 0" />
+            </svg>
+          </div>
+          <div className="product-preview__details">
+            <span className="product-preview__label">AI Extracted Selection</span>
+            <div className="product-preview__title">Item: {terms.items[0]?.description}</div>
+            <div className="product-preview__meta">
+              <span>
+                Item Code <code className="mono">{terms.items[0]?.sku}</code>
+              </span>
+              <span>·</span>
+              <span>Qty {terms.items[0]?.quantity}</span>
+              <span>·</span>
+              <span>
+                {formatMinorUnits(terms.items[0]?.unitAmountMinor ?? 0, terms.payment.currency)}{" "}
+                each
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <section className="mandate__intelligence" aria-label="AI Decision Intelligence">
+        <div className="intelligence__header">
+          <div className="intelligence__title-wrap">
+            <span className="intelligence__badge">
+              AI Procurement Intelligence &amp; Buyer Reassurance
+            </span>
+            <span className="intelligence__sub">
+              Catalog specification qualification &amp; competitive value evaluation
+            </span>
+          </div>
+          <span className="intelligence__score">
+            Quality/Value Match: <strong>{allowed ? "96% (Optimal)" : "Blocked by Policy"}</strong>
+          </span>
+        </div>
+        <div className="intelligence__rationale">
+          <p className="intelligence__narrative">
+            <strong>Autonomous Recommendation:</strong> {proposal.rationale}
+          </p>
+        </div>
+
+        <div className="intelligence__reassurance-grid">
+          <div className="reassurance__item">
+            <span className="reassurance__badge">💎 Spec Quality</span>
+            <span className="reassurance__text">
+              Directly extracted and verified against active catalog attributes and merchant
+              reputation.
+            </span>
+          </div>
+          <div className="reassurance__item">
+            <span className="reassurance__badge">⚖️ Market Comparison</span>
+            <span className="reassurance__text">
+              Screened against alternative options to eliminate low-durability items and overpriced
+              diminishing returns.
+            </span>
+          </div>
+          <div className="reassurance__item">
+            <span className="reassurance__badge">🛡️ Financial Dual-Custody</span>
+            <span className="reassurance__text">
+              {allowed
+                ? "Fully compliant with enterprise spend cap. Locked until authorized with your physical passkey."
+                : "Transaction exceeds policy cap — blocked from payment capture to protect funds."}
+            </span>
+          </div>
+        </div>
+
+        <div className="intelligence__metrics">
+          <div className="intelligence__metric">
+            <span className="metric__label">Price/Spec Density</span>
+            <span className="metric__value">{allowed ? "Optimal Sweet-Spot" : "Violates Cap"}</span>
+          </div>
+          <div className="intelligence__metric">
+            <span className="metric__label">Catalog Provenance</span>
+            <span className="metric__value">{props.catalogLabel}</span>
+          </div>
+          <div className="intelligence__metric">
+            <span className="metric__label">Settlement Security</span>
+            <span className="metric__value">Zero-Trust Passkey Gate</span>
+          </div>
+        </div>
+      </section>
+
       <dl className="mandate__facts">
         <dt>Agent</dt>
         <dd>

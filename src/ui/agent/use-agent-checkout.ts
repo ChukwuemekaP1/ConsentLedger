@@ -22,6 +22,7 @@ import {
 } from "./checkout-machine.js";
 import type { Failure } from "./failure.js";
 import { unsupportedPasskeyFailure } from "./passkeys.js";
+import type { PolicyDocument } from "../../domain/policy/policy.js";
 
 export const PROMPT_MAX_LENGTH = 500;
 export const DISPLAY_NAME_MAX_LENGTH = 255;
@@ -42,7 +43,7 @@ export interface AgentCheckout {
   readonly nowMs: number;
   readonly fieldErrors: FieldErrors;
   readonly setPrompt: (prompt: string) => void;
-  readonly propose: () => Promise<void>;
+  readonly propose: (policy?: PolicyDocument) => Promise<void>;
   readonly registerPasskey: (displayName: string) => Promise<void>;
   readonly signMandate: () => Promise<void>;
   readonly onPayPalApproved: () => Promise<void>;
@@ -116,7 +117,7 @@ export function useAgentCheckout(deps: AgentCheckoutDeps): AgentCheckout {
   );
 
   const propose = useCallback(
-    () =>
+    (policy?: PolicyDocument) =>
       exclusive(async () => {
         const flow = stateRef.current.flow;
         if (flow.stage !== "compose") return;
@@ -131,7 +132,7 @@ export function useAgentCheckout(deps: AgentCheckoutDeps): AgentCheckout {
         }
         setFieldErrors({});
         send({ type: "PROPOSE_STARTED" });
-        const result = await api.propose(prompt);
+        const result = await api.propose(prompt, policy);
         if (!result.ok) {
           send({ type: "FAILED", failure: result.failure });
           return;
