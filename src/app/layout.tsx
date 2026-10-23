@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import "../ui/globals.css";
+import "../ui/theme/tokens.css";
+import "../ui/theme/consumer-ui.css";
 
 export const metadata: Metadata = {
   title: "ConsentLedger",

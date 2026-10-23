@@ -1,7 +1,8 @@
 @import "tailwindcss";
 
 /* Design tokens from docs/DESIGN.md */
-:root {
+:root,
+:root[data-theme="dark"] {
   --ink: #0b0d10;
   --panel: #12161b;
   --panel-2: #181d24;
@@ -14,4 +15,31 @@
   --breach: #ff5c5c;
   --amber: #f5b544;
   --link: #5aa9ff;
+  --input-bg: #0e1216;
+  --input-border: #232a33;
+  --wb-bg: linear-gradient(180deg, #07090c 0%, #0b0e14 100%);
+  --wb-glow-1: rgba(90, 169, 255, 0.09);
+  --wb-glow-2: rgba(61, 220, 151, 0.08);
+  --wb-glow-3: rgba(139, 92, 246, 0.06);
+}
+
+:root[data-theme="light"] {
+  --ink: #f0f4f8;
+  --panel: #ffffff;
+  --panel-2: #f8fafc;
+  --line: #e2e8f0;
+  --text: #0f172a;
+  --text-dim: #64748b;
+  --paper: #ffffff;
+  --paper-ink: #0f172a;
+  --seal: #10b981;
+  --breach: #ef4444;
+  --amber: #d97706;
+  --link: #2563eb;
+  --input-bg: #f8fafc;
+  --input-border: #cbd5e1;
+  --wb-bg: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  --wb-glow-1: rgba(37, 99, 235, 0.05);
+  --wb-glow-2: rgba(16, 185, 129, 0.05);
+  --wb-glow-3: rgba(99, 102, 241, 0.04);
 }

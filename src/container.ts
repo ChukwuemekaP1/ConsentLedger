@@ -12,7 +12,10 @@
  */
 
 import type { KeyObject } from "node:crypto";
+import { installResilientDns } from "./infrastructure/config/dns.js";
 import { config } from "./infrastructure/config/env.js";
+
+installResilientDns();
 import { logger, childLogger } from "./infrastructure/logging/logger.js";
 import { SystemClock } from "./infrastructure/clock/system-clock.js";
 import { CryptoIdGenerator } from "./infrastructure/clock/crypto-id-generator.js";
@@ -179,7 +182,12 @@ let llmClientInstance: LlmClient | undefined;
 function getLlmClient(): LlmClient {
   if (!llmClientInstance) {
     if (config.LLM_MODE === "live" && config.GEMINI_API_KEY) {
-      llmClientInstance = new GeminiLlmClient(config.GEMINI_API_KEY, config.GEMINI_MODEL);
+      llmClientInstance = new GeminiLlmClient(
+        config.GEMINI_API_KEY,
+        config.GEMINI_MODEL,
+        globalThis.fetch,
+        { fallbackModels: config.GEMINI_FALLBACK_MODELS },
+      );
     } else {
       llmClientInstance = new FakeLlmClient();
     }

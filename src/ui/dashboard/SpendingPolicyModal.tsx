@@ -42,12 +42,11 @@ const PRESET_BUDGETS = [
 
 export function buildPolicyDocument(capMinor: number, currency = "USD"): PolicyDocument {
   return {
-    id: "policy-custom",
+    id: "policy-v1",
     version: 1,
     rules: {
       maxPerTxMinor: capMinor,
       currencyAllowlist: [currency],
-      merchantAllowlist: ["shopx", "coffee-works", "cloudco", "office-plus"],
     },
   };
 }

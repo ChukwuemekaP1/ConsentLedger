@@ -15,6 +15,9 @@ import { runMigrations } from "../../src/infrastructure/db/migrate.js";
 import { PostgresUnitOfWork } from "../../src/infrastructure/db/unit-of-work.js";
 import { PostgresLedgerRepo } from "../../src/infrastructure/db/repositories/postgres-ledger-repo.js";
 import { principals, agents, mandates } from "../../src/infrastructure/db/schema/index.js";
+import { installResilientDns } from "../../src/infrastructure/config/dns.js";
+
+installResilientDns();
 
 export function getTestDatabaseUrl(): string {
   if (!process.env["DATABASE_URL"] && !process.env["DATABASE_ADMIN_URL"]) {

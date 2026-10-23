@@ -13,12 +13,14 @@
  */
 
 import type { Failure } from "./failure.js";
-import type { ProposalResponse } from "./api-schemas.js";
+import type { ProductView, ProposalResponse } from "./api-schemas.js";
 
 export interface ProposalView {
   readonly mandate: ProposalResponse["mandate"];
   readonly rationale: string;
   readonly evaluation: ProposalResponse["evaluation"];
+  /** Display-only catalog facts (images, store links). Never part of signed terms. */
+  readonly products?: readonly ProductView[];
 }
 
 export interface ConsentView {
@@ -156,6 +158,8 @@ function failFrom(flow: Flow, failure: Failure): Flow {
     case "passkey":
     case "consent":
     case "provider":
+    case "assistant":
+    case "stores":
     case "network":
     case "validation":
     case "unexpected":

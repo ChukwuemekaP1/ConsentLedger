@@ -48,11 +48,18 @@ describe("failureFromProblem", () => {
     const denied = f(undefined, 422, { reasons: ["MERCHANT_NOT_ALLOWED"] });
     expect(denied).toMatchObject({ category: "denied", code: "POLICY_DENIED" });
     expect(denied.reasons).toEqual(["MERCHANT_NOT_ALLOWED"]);
+    // An AI rate limit is not a payment-provider failure; the user must not be told PayPal failed.
     expect(f(undefined, 429)).toMatchObject({
-      category: "provider",
+      category: "assistant",
       code: "RATE_LIMITED",
       retryable: true,
     });
+  });
+
+  it("maps AI and store-search failures to their own non-payment categories", () => {
+    expect(f("AI_QUOTA_EXHAUSTED", 429)).toMatchObject({ category: "assistant", retryable: false });
+    expect(f("AI_PROPOSAL_FAILED", 502)).toMatchObject({ category: "assistant", retryable: true });
+    expect(f("CATALOG_UNAVAILABLE", 503)).toMatchObject({ category: "stores", retryable: true });
   });
 
   it("falls back to unexpected (never success) for unknown codes", () => {

@@ -1,0 +1,158 @@
+/* ==========================================================================
+   CONSENTLEDGER DESIGN TOKENS (PHASE 8: CONSUMER-GRADE REFINEMENT)
+   Inspired by soft-surface card architecture with dual Light & Dark themes.
+   ========================================================================== */
+
+:root,
+:root[data-theme="light"] {
+  /* Legacy Design System Tokens (docs/DESIGN.md & globals.css) */
+  --ink: #f0f4f8;
+  --panel: #ffffff;
+  --panel-2: #f8fafc;
+  --line: #e2e8f0;
+  --text: #0f172a;
+  --text-dim: #64748b;
+  --paper: #ffffff;
+  --paper-ink: #0f172a;
+  --seal: #10b981;
+  --breach: #ef4444;
+  --amber: #d97706;
+  --link: #2563eb;
+  --input-bg: #f8fafc;
+  --input-border: #cbd5e1;
+  --wb-bg: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  --wb-glow-1: rgba(37, 99, 235, 0.05);
+  --wb-glow-2: rgba(16, 185, 129, 0.05);
+  --wb-glow-3: rgba(99, 102, 241, 0.04);
+
+  /* Canvas Background */
+  --cl-bg-base: #f1f5f9;
+  --cl-bg: radial-gradient(130% 90% at 10% 0%, #e2e8f0 0%, #f8fafc 50%, #f1f5f9 100%);
+
+  /* Surfaces & Glassmorphism */
+  --cl-surface: #ffffff;
+  --cl-surface-translucent: rgba(255, 255, 255, 0.85);
+  --cl-surface-raised: #ffffff;
+  --cl-surface-inset: #f1f5f9;
+  --cl-line: #e2e8f0;
+  --cl-line-subtle: #f1f5f9;
+
+  /* Typography / Text Colors */
+  --cl-ink: #0f172a;
+  --cl-ink-dim: #64748b;
+  --cl-ink-muted: #94a3b8;
+  --cl-ink-inverse: #ffffff;
+
+  /* Hero Metric Card (Reference Dark Contrast Card) */
+  --cl-hero-bg: #1e293b;
+  --cl-hero-text: #ffffff;
+  --cl-hero-dim: #94a3b8;
+  --cl-hero-accent: #34d399;
+
+  /* Accent & Action */
+  --cl-accent: #1e293b;
+  --cl-accent-subtle: #e2e8f0;
+  --cl-accent-hover: #0f172a;
+  --cl-ring: rgba(30, 41, 59, 0.2);
+
+  /* Security & Protocol Status Semantics (docs/DESIGN.md §3) */
+  --cl-seal: #10b981;
+  --cl-seal-bg: #ecfdf5;
+  --cl-breach: #ef4444;
+  --cl-breach-bg: #fef2f2;
+  --cl-amber: #f59e0b;
+  --cl-amber-bg: #fffbeb;
+  --cl-link: #2563eb;
+
+  /* Elevation Shadows */
+  --cl-shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06);
+  --cl-shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
+  --cl-shadow-lg: 0 10px 25px rgba(15, 23, 42, 0.1);
+  --cl-shadow-floating: 0 20px 40px rgba(15, 23, 42, 0.14);
+
+  /* Curvatures */
+  --cl-radius-sm: 10px;
+  --cl-radius-md: 16px;
+  --cl-radius-lg: 24px;
+  --cl-radius-xl: 32px;
+  --cl-radius-pill: 9999px;
+}
+
+:root[data-theme="dark"] {
+  /* Legacy Design System Tokens (docs/DESIGN.md & globals.css) */
+  --ink: #0b0d10;
+  --panel: #12161b;
+  --panel-2: #181d24;
+  --line: #232a33;
+  --text: #e7ecf2;
+  --text-dim: #8c97a6;
+  --paper: #f3efe6;
+  --paper-ink: #1b1a17;
+  --seal: #3ddc97;
+  --breach: #ff5c5c;
+  --amber: #f5b544;
+  --link: #5aa9ff;
+  --input-bg: #0e1216;
+  --input-border: #232a33;
+  --wb-bg: linear-gradient(180deg, #07090c 0%, #0b0e14 100%);
+  --wb-glow-1: rgba(90, 169, 255, 0.09);
+  --wb-glow-2: rgba(61, 220, 151, 0.08);
+  --wb-glow-3: rgba(139, 92, 246, 0.06);
+
+  /* Canvas Background */
+  --cl-bg-base: #0c0f0e;
+  --cl-bg: radial-gradient(130% 90% at 10% 0%, #151d18 0%, #0d1110 50%, #0a0d0c 100%);
+
+  /* Surfaces & Glassmorphism */
+  --cl-surface: #12161b;
+  --cl-surface-translucent: rgba(18, 22, 27, 0.75);
+  --cl-surface-raised: #181d24;
+  --cl-surface-inset: #0e1216;
+  --cl-line: #232a33;
+  --cl-line-subtle: rgba(255, 255, 255, 0.05);
+
+  /* Typography / Text Colors */
+  --cl-ink: #f0f4f2;
+  --cl-ink-dim: #9aa8a1;
+  --cl-ink-muted: #647069;
+  --cl-ink-inverse: #0e1210;
+
+  /* Hero Metric Card in Dark Mode (Inverted Light Tint or Radiant Deep Slate) */
+  --cl-hero-bg: #1c2320;
+  --cl-hero-text: #ffffff;
+  --cl-hero-dim: #a4b4ad;
+  --cl-hero-accent: #78e4b2;
+
+  /* Accent & Action */
+  --cl-accent: #5dbb90;
+  --cl-accent-subtle: rgba(93, 187, 144, 0.15);
+  --cl-accent-hover: #71caa0;
+  --cl-ring: rgba(93, 187, 144, 0.3);
+
+  /* Security & Protocol Status Semantics (docs/DESIGN.md §3) */
+  --cl-seal: #3ddc97;
+  --cl-seal-bg: rgba(61, 220, 151, 0.15);
+  --cl-breach: #ff5c5c;
+  --cl-breach-bg: rgba(255, 92, 92, 0.15);
+  --cl-amber: #f5b544;
+  --cl-amber-bg: rgba(245, 181, 68, 0.15);
+  --cl-link: #60a5fa;
+
+  /* Elevation Shadows */
+  --cl-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --cl-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --cl-shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.6);
+  --cl-shadow-floating: 0 20px 48px rgba(0, 0, 0, 0.7);
+}
+
+/* Global Reset Integration */
+body {
+  background: var(--cl-bg);
+  background-color: var(--cl-bg-base);
+  color: var(--cl-ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  min-height: 100vh;
+  transition:
+    background-color 0.25s ease,
+    color 0.25s ease;
+}

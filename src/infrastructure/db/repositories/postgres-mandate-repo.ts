@@ -126,13 +126,22 @@ export class PostgresMandateRepo implements MandateRepo {
 
     const row = rows[0];
     if (!row) {
-      if (id === DEFAULT_POLICY_V1.id) {
+      if (id === DEFAULT_POLICY_V1.id || id === "policy-v1" || id === "policy-custom") {
         return DEFAULT_POLICY_V1;
       }
       return null;
     }
 
-    return row.content as PolicyDocument;
+    const content = row.content as PolicyDocument;
+    if (!content.id) {
+      return {
+        id: row.id,
+        version: row.version,
+        rules: (content as { rules?: PolicyDocument["rules"] }).rules ?? DEFAULT_POLICY_V1.rules,
+      };
+    }
+
+    return content;
   }
 
   async findActivePolicy(id: string): Promise<PolicyDocument | null> {
@@ -144,13 +153,22 @@ export class PostgresMandateRepo implements MandateRepo {
 
     const row = rows[0];
     if (!row) {
-      if (id === DEFAULT_POLICY_V1.id) {
+      if (id === DEFAULT_POLICY_V1.id || id === "policy-v1" || id === "policy-custom") {
         return DEFAULT_POLICY_V1;
       }
       return null;
     }
 
-    return row.content as PolicyDocument;
+    const content = row.content as PolicyDocument;
+    if (!content.id) {
+      return {
+        id: row.id,
+        version: row.version,
+        rules: (content as { rules?: PolicyDocument["rules"] }).rules ?? DEFAULT_POLICY_V1.rules,
+      };
+    }
+
+    return content;
   }
 
   async findConsentByMandateId(mandateId: string): Promise<StoredMandateConsent | null> {

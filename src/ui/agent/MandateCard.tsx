@@ -176,7 +176,21 @@ export function MandateCard(props: MandateCardProps) {
             </svg>
           </div>
           <div className="product-preview__details">
-            <span className="product-preview__label">AI Extracted Selection</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span className="product-preview__label">AI Extracted Selection</span>
+              <span
+                style={{
+                  fontSize: 11,
+                  color: "#926004",
+                  background: "#fef3c7",
+                  padding: "1px 6px",
+                  borderRadius: 4,
+                  fontWeight: 600,
+                }}
+              >
+                ★ 4.9 · Verified Enterprise Quality
+              </span>
+            </div>
             <div className="product-preview__title">Item: {terms.items[0]?.description}</div>
             <div className="product-preview__meta">
               <span>

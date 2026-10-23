@@ -55,7 +55,17 @@ const optionalNowSchema = z.object({
 
   // ── Issue #5: Gemini ───────────────────────────────────────────────────
   GEMINI_API_KEY: z.string().optional(),
-  GEMINI_MODEL: z.string().default("gemini-1.5-pro"),
+  GEMINI_MODEL: z.string().default("gemini-3.5-flash"),
+  // Comma-separated models tried in order when the primary is rate limited or retired.
+  GEMINI_FALLBACK_MODELS: z
+    .string()
+    .default("gemini-3.5-flash-lite,gemini-flash-lite-latest")
+    .transform((v) =>
+      v
+        .split(",")
+        .map((m) => m.trim())
+        .filter((m) => m.length > 0),
+    ),
 
   // ── Issue #5: Channel3 product catalog ────────────────────────────────
   CHANNEL3_API_KEY: z.string().optional(),

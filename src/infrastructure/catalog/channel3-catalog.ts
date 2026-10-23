@@ -146,7 +146,11 @@ export class Channel3Catalog implements ProductCatalog {
         throw new Error(`Malformed Channel3 search response: ${parsed.error.message}`);
       }
 
-      return this.normalizeProducts(parsed.data.products);
+      const normalized = this.normalizeProducts(parsed.data.products);
+      if (normalized.length === 0 && this.fallbackCatalog) {
+        return this.fallbackCatalog.search(query, options);
+      }
+      return normalized;
     } catch (err) {
       if (this.fallbackCatalog) {
         return this.fallbackCatalog.search(query, options);

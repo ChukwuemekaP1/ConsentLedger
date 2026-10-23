@@ -43,7 +43,7 @@ export interface AgentCheckout {
   readonly nowMs: number;
   readonly fieldErrors: FieldErrors;
   readonly setPrompt: (prompt: string) => void;
-  readonly propose: (policy?: PolicyDocument) => Promise<void>;
+  readonly propose: (policy?: PolicyDocument, promptOverride?: string) => Promise<void>;
   readonly registerPasskey: (displayName: string) => Promise<void>;
   readonly signMandate: () => Promise<void>;
   readonly onPayPalApproved: () => Promise<void>;
@@ -67,6 +67,7 @@ export function useAgentCheckout(deps: AgentCheckoutDeps): AgentCheckout {
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const stateRef = useRef<MachineState>(initialState);
   const inFlight = useRef(false);
+  const lastPolicy = useRef<PolicyDocument | undefined>(undefined);
 
   const send = useCallback((event: Event): void => {
     const next = reduce(stateRef.current, event);
@@ -117,11 +118,14 @@ export function useAgentCheckout(deps: AgentCheckoutDeps): AgentCheckout {
   );
 
   const propose = useCallback(
-    (policy?: PolicyDocument) =>
+    (policy?: PolicyDocument, promptOverride?: string) =>
       exclusive(async () => {
         const flow = stateRef.current.flow;
         if (flow.stage !== "compose") return;
-        const prompt = flow.prompt.trim();
+        if (policy !== undefined) lastPolicy.current = policy;
+        // A modal can submit a fully-formed request in the same tick it sets the prompt,
+        // before React state has flushed; the override avoids proposing a stale prompt.
+        const prompt = (promptOverride ?? flow.prompt).trim();
         if (prompt.length === 0) {
           setFieldErrors({ prompt: "Describe what you want the agent to buy." });
           return;
@@ -156,6 +160,7 @@ export function useAgentCheckout(deps: AgentCheckoutDeps): AgentCheckout {
             mandate: result.value.mandate,
             rationale: result.value.proposal.rationale,
             evaluation: result.value.evaluation,
+            products: result.value.products,
           },
         });
       }),
@@ -344,7 +349,7 @@ export function useAgentCheckout(deps: AgentCheckoutDeps): AgentCheckout {
         const flow = stateRef.current.flow;
         switch (flow.stage) {
           case "compose":
-            return propose();
+            return propose(lastPolicy.current);
           case "review":
             return signMandate();
           case "consented":

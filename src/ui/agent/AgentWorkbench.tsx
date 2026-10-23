@@ -7,9 +7,9 @@
  * component runs against real endpoints in the browser and against fakes in tests.
  */
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { createAgentApi, type AgentApi } from "./api-client.js";
-import type { ClientConfig } from "./api-schemas.js";
+import type { ClientConfig, SearchResultProduct } from "./api-schemas.js";
 import { browserPasskeys, type PasskeyPort } from "./passkeys.js";
 import { paypalV6, type PayPalCheckoutPort } from "./paypal-v6.js";
 import { CheckoutPanel } from "./CheckoutPanel.js";
@@ -24,6 +24,11 @@ import {
   type DashboardApi,
   type LabScenarioMeta,
 } from "../dashboard/dashboard-api.js";
+import type {
+  DashboardOverviewView,
+  DashboardTimelineEvent,
+  BlockedAttemptRecord,
+} from "../../application/ports/dashboard-query-port.js";
 import { BusinessLedgerSurface } from "../dashboard/BusinessLedgerSurface.js";
 import { SecurityLabPanel } from "../dashboard/SecurityLabPanel.js";
 import { OfflineVerifierView } from "../dashboard/OfflineVerifierView.js";
@@ -32,6 +37,12 @@ import {
   type SpendingPolicyConfig,
   buildPolicyDocument,
 } from "../dashboard/SpendingPolicyModal.js";
+import { PurchaseRequestModal } from "./PurchaseRequestModal.js";
+import { SearchingAnimation } from "./SearchingAnimation.js";
+import { ProductResultCard } from "./ProductResultCard.js";
+import { AppNavigation, type Surface } from "../shell/AppNavigation.js";
+import { DemoAuthModal } from "../shell/DemoAuthModal.js";
+import { HomeDashboard } from "../home/HomeDashboard.js";
 import type { PolicyDocument } from "../../domain/policy/policy.js";
 
 export interface AgentWorkbenchProps {
@@ -40,7 +51,7 @@ export interface AgentWorkbenchProps {
   readonly passkeys?: PasskeyPort;
   readonly paypal?: PayPalCheckoutPort;
   readonly now?: () => number;
-  readonly initialSurface?: "agent" | "ledger" | "lab";
+  readonly initialSurface?: Surface;
 }
 
 const EXAMPLES = [
@@ -53,8 +64,12 @@ export interface ProductSuggestion {
   readonly icon: string;
   readonly title: string;
   readonly priceMinor: number;
-  readonly merchant: string;
   readonly prompt: string;
+  readonly category: string;
+  readonly specs: readonly string[];
+  readonly badge?: string;
+  readonly rating?: string;
+  readonly reviews?: string;
 }
 
 export const PRODUCT_SUGGESTIONS: readonly ProductSuggestion[] = [
@@ -62,36 +77,45 @@ export const PRODUCT_SUGGESTIONS: readonly ProductSuggestion[] = [
     icon: "⌨️",
     title: "75% Mechanical Keyboard",
     priceMinor: 8500,
-    merchant: "ShopX",
     prompt: "Buy a 75% mechanical keyboard",
+    category: "Electronics",
+    specs: ["Hot-Swappable Switches", "Aluminum Chassis"],
+    badge: "Popular",
+    rating: "★ 4.9",
+    reviews: "1,240 reviews",
   },
   {
     icon: "🖥️",
     title: "Gas-Spring Monitor Arm",
     priceMinor: 6500,
-    merchant: "Office Plus",
-    prompt: "Buy a single gas-spring monitor arm",
-  },
-  {
-    icon: "☁️",
-    title: "Cloud Compute Credits $100",
-    priceMinor: 10000,
-    merchant: "CloudCo",
-    prompt: "Get $100 of cloud compute credits",
+    prompt: "Buy a gas-spring ergonomic monitor arm",
+    category: "Office",
+    specs: ["Supports Up to 32-inch", "Integrated Cable Management"],
+    badge: "Ergonomics",
+    rating: "★ 4.8",
+    reviews: "820 reviews",
   },
   {
     icon: "☕",
-    title: "Ethiopian Coffee Beans (1kg)",
+    title: "Single-Origin Coffee",
     priceMinor: 2400,
-    merchant: "Coffee Works",
-    prompt: "Order 1kg of Ethiopian Yirgacheffe coffee beans",
+    prompt: "Order 1kg of Ethiopian whole bean specialty coffee",
+    category: "Pantry",
+    specs: ["Arabica Whole Bean", "Fresh Roasted"],
+    badge: "Direct Trade",
+    rating: "★ 5.0",
+    reviews: "450 reviews",
   },
   {
     icon: "🎧",
     title: "Studio Headphones Setup",
     priceMinor: 39900,
-    merchant: "ShopX",
     prompt: "Buy a premium noise-cancelling studio headphones setup for $399",
+    category: "Audio",
+    specs: ["Active Hybrid ANC", "High-Resolution Drivers"],
+    badge: "Flagship",
+    rating: "★ 4.9",
+    reviews: "2,100 reviews",
   },
 ];
 
@@ -148,15 +172,38 @@ export function AgentWorkbench(props: AgentWorkbenchProps) {
   const paypal = props.paypal ?? paypalV6;
   const now = useMemo(() => props.now ?? (() => Date.now()), [props.now]);
 
-  const [activeSurface, setActiveSurface] = useState<"agent" | "ledger" | "lab">(
-    props.initialSurface ?? "agent",
-  );
+  const [activeSurface, setActiveSurface] = useState<Surface>(props.initialSurface ?? "agent");
   const dashboardApi = useMemo(
     () => props.dashboardApi ?? createDashboardApi((i, init) => fetch(i, init)),
     [props.dashboardApi],
   );
 
+  const checkout = useAgentCheckout({ api, passkeys, now });
+  const { state, nowMs, fieldErrors } = checkout;
+  const flow = state.flow;
+
   const [labScenarios, setLabScenarios] = useState<readonly LabScenarioMeta[]>([]);
+  const [overview, setOverview] = useState<DashboardOverviewView | undefined>(undefined);
+  const [timelineEvents, setTimelineEvents] = useState<readonly DashboardTimelineEvent[]>([]);
+  const [blockedAttempts, setBlockedAttempts] = useState<readonly BlockedAttemptRecord[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.all([
+      dashboardApi.getOverview().catch(() => undefined),
+      dashboardApi.getTimeline().catch(() => ({ events: [] })),
+      dashboardApi.getBlockedAttempts().catch(() => ({ attempts: [] })),
+    ]).then(([ov, tl, ba]) => {
+      if (cancelled) return;
+      if (ov) setOverview(ov);
+      setTimelineEvents(tl.events);
+      setBlockedAttempts(ba.attempts);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [dashboardApi, flow.stage]);
+
   useEffect(() => {
     if (activeSurface !== "lab") return;
     let cancelled = false;
@@ -171,13 +218,11 @@ export function AgentWorkbench(props: AgentWorkbenchProps) {
     };
   }, [dashboardApi, activeSurface]);
 
-  const checkout = useAgentCheckout({ api, passkeys, now });
-  const { state, nowMs, fieldErrors } = checkout;
-  const flow = state.flow;
-
   const [config, setConfig] = useState<ClientConfig | undefined>(undefined);
   const [configError, setConfigError] = useState(false);
-  const [displayName, setDisplayName] = useState("");
+  const [displayName, setDisplayName] = useState("Alex Vance");
+  const [passkeyName, setPasskeyName] = useState("");
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -190,6 +235,64 @@ export function AgentWorkbench(props: AgentWorkbenchProps) {
       cancelled = true;
     };
   }, [api]);
+
+  useEffect(() => {
+    if (props.dashboardApi !== undefined) {
+      return;
+    }
+    let cancelled = false;
+    async function initSession() {
+      try {
+        const res = await fetch("/api/v1/auth/session");
+        const data = (await res.json()) as {
+          authenticated?: boolean;
+          displayName?: string;
+        };
+        if (data.authenticated && data.displayName) {
+          if (!cancelled) setDisplayName(data.displayName);
+        } else {
+          const postRes = await fetch("/api/v1/auth/session", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              principalId: "a11ce000-0000-4000-8000-000000000001",
+              displayName: "Alex Vance",
+            }),
+          });
+          const postData = (await postRes.json()) as { displayName?: string };
+          if (postData.displayName && !cancelled) {
+            setDisplayName(postData.displayName);
+          }
+        }
+        if (!cancelled) {
+          void dashboardApi
+            .getOverview()
+            .then((ov) => {
+              if (!cancelled) setOverview(ov);
+            })
+            .catch(() => {});
+          void dashboardApi
+            .getTimeline()
+            .then((tl) => {
+              if (!cancelled) setTimelineEvents(tl.events);
+            })
+            .catch(() => {});
+          void dashboardApi
+            .getBlockedAttempts()
+            .then((ba) => {
+              if (!cancelled) setBlockedAttempts(ba.attempts);
+            })
+            .catch(() => {});
+        }
+      } catch {
+        if (!cancelled) setDisplayName("Alex Vance");
+      }
+    }
+    void initSession();
+    return () => {
+      cancelled = true;
+    };
+  }, [dashboardApi, props.dashboardApi]);
 
   const reviewHeading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
@@ -206,6 +309,7 @@ export function AgentWorkbench(props: AgentWorkbenchProps) {
     flow.stage === "ordering";
 
   const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false);
+  const [isSpecModalOpen, setIsSpecModalOpen] = useState(false);
   const [policyConfig, setPolicyConfig] = useState<SpendingPolicyConfig>({
     maxPerTxMinor: 10000, // $100.00
     monthlyBudgetMinor: 50000, // $500.00
@@ -218,14 +322,51 @@ export function AgentWorkbench(props: AgentWorkbenchProps) {
     setActivePolicyDoc(doc);
   };
 
+  const [searchResults, setSearchResults] = useState<readonly SearchResultProduct[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+
+  const handleSearchCatalog = useCallback(
+    async (queryToSearch: string) => {
+      const q = queryToSearch.trim();
+      if (!q) return;
+      setIsSearching(true);
+      setSearchError(null);
+      try {
+        const res = await api.searchProducts(q, 8);
+        if (res.ok) {
+          setSearchResults(res.value.products);
+          if (res.value.products.length === 0) {
+            setSearchError(`No store items found for "${q}". Try adjusting your keywords.`);
+          }
+        } else {
+          setSearchError("Live product search is temporarily unavailable. Please retry.");
+        }
+      } catch {
+        setSearchError("Unable to connect to merchant store catalog.");
+      } finally {
+        setIsSearching(false);
+      }
+    },
+    [api],
+  );
+
   const onSubmitPrompt = (event: FormEvent): void => {
     event.preventDefault();
     void checkout.propose(activePolicyDoc);
   };
   const onSubmitRegistration = (event: FormEvent): void => {
     event.preventDefault();
-    void checkout.registerPasskey(displayName);
+    void checkout.registerPasskey(passkeyName);
   };
+
+  const handlePayPalApproved = useCallback(() => {
+    void checkout.onPayPalApproved();
+  }, [checkout.onPayPalApproved]);
+
+  const handleSimulatedApproval = useCallback(() => {
+    void checkout.simulateApproval();
+  }, [checkout.simulateApproval]);
 
   const signature =
     context.stage === "signing"
@@ -238,98 +379,50 @@ export function AgentWorkbench(props: AgentWorkbenchProps) {
 
   return (
     <main className="wb">
+      <AppNavigation
+        activeSurface={activeSurface}
+        onSelectSurface={setActiveSurface}
+        onOpenPurchaseModal={() => setIsSpecModalOpen(true)}
+        onOpenPolicyModal={() => setIsPolicyModalOpen(true)}
+        onOpenAuthModal={() => setIsAuthModalOpen(true)}
+        config={config}
+        configError={configError}
+        passkeyRegistered={state.passkeyRegistered}
+        displayName={displayName}
+        maxPerTxMinor={policyConfig.maxPerTxMinor}
+      />
       <div className="wb-shell">
-        <header className="wb-header">
-          <div>
-            <h1 className="wb-title">
-              ConsentLedger ·{" "}
-              {activeSurface === "agent"
-                ? "Agent"
-                : activeSurface === "ledger"
-                  ? "Business Ledger"
-                  : "Security Lab"}
-            </h1>
-            <p className="wb-subtitle">
-              {activeSurface === "agent"
-                ? "The agent proposes. You sign with a passkey. PayPal settles."
-                : activeSurface === "ledger"
-                  ? "Authoritative spend caps, passkey approvals, settlement timeline, and audit evidence."
-                  : "Reproducible adversarial attacks, zero-capture verification, and offline evidence auditing."}
-            </p>
+        {activeSurface === "home" && (
+          <div id="panel-home" role="tabpanel" aria-labelledby="tab-home">
+            <HomeDashboard
+              overview={overview}
+              events={timelineEvents}
+              blockedAttempts={blockedAttempts}
+              displayName={displayName}
+              policyConfig={policyConfig}
+              onOpenPurchaseModal={() => setIsSpecModalOpen(true)}
+              onOpenPolicyModal={() => setIsPolicyModalOpen(true)}
+              onOpenAuthModal={() => setIsAuthModalOpen(true)}
+            />
           </div>
-          <ul className="wb-badges" aria-label="Environment">
-            {config?.catalogMode === "fixture" && <li className="badge badge--amber">Demo data</li>}
-            {config?.settlementMode === "simulated" && (
-              <li className="badge badge--amber">Simulated settlement</li>
-            )}
-            {config?.settlementMode === "paypal" && config.environment === "sandbox" && (
-              <li className="badge badge--link">PayPal Sandbox</li>
-            )}
-            {config === undefined && configError && (
-              <li className="badge badge--breach">Config unavailable</li>
-            )}
-            {state.passkeyRegistered && <li className="badge badge--seal">Passkey registered</li>}
-          </ul>
-        </header>
-
-        <nav className="wb-nav-bar" aria-label="Workbench Surfaces">
-          <div className="wb-tabs" role="tablist">
-            <button
-              type="button"
-              role="tab"
-              id="tab-agent"
-              aria-selected={activeSurface === "agent"}
-              aria-controls="panel-agent"
-              className={`wb-tab ${activeSurface === "agent" ? "wb-tab--active" : ""}`}
-              onClick={() => setActiveSurface("agent")}
-            >
-              Agent Workbench
-            </button>
-            <button
-              type="button"
-              role="tab"
-              id="tab-ledger"
-              aria-selected={activeSurface === "ledger"}
-              aria-controls="panel-ledger"
-              className={`wb-tab ${activeSurface === "ledger" ? "wb-tab--active" : ""}`}
-              onClick={() => setActiveSurface("ledger")}
-            >
-              Business Ledger
-            </button>
-            <button
-              type="button"
-              role="tab"
-              id="tab-lab"
-              aria-selected={activeSurface === "lab"}
-              aria-controls="panel-lab"
-              className={`wb-tab ${activeSurface === "lab" ? "wb-tab--active" : ""}`}
-              onClick={() => setActiveSurface("lab")}
-            >
-              Security Lab
-            </button>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <button
-              type="button"
-              className="btn"
-              style={{
-                minHeight: 34,
-                padding: "4px 12px",
-                fontSize: 12,
-                borderColor: "var(--seal)",
-                color: "var(--text)",
-              }}
-              onClick={() => setIsPolicyModalOpen(true)}
-              aria-label="Configure spending policy and transaction caps"
-            >
-              ⚙️ Spending Policy ({formatMinorUnits(policyConfig.maxPerTxMinor, "USD")} / tx)
-            </button>
-          </div>
-        </nav>
+        )}
 
         {activeSurface === "ledger" && (
-          <div id="panel-ledger" role="tabpanel" aria-labelledby="tab-ledger">
+          <div
+            id="panel-ledger"
+            role="tabpanel"
+            aria-labelledby="tab-ledger"
+            style={{ display: "grid", gap: 16 }}
+          >
+            <div className="wb-header">
+              <div>
+                <h1 className="wb-title">ConsentLedger · Business Ledger</h1>
+                <p className="wb-subtitle">
+                  Authoritative spend caps, passkey approvals, settlement timeline, and audit
+                  evidence.
+                </p>
+              </div>
+            </div>
             <BusinessLedgerSurface api={dashboardApi} />
           </div>
         )}
@@ -339,8 +432,17 @@ export function AgentWorkbench(props: AgentWorkbenchProps) {
             id="panel-lab"
             role="tabpanel"
             aria-labelledby="tab-lab"
-            style={{ display: "grid", gap: 20 }}
+            style={{ display: "grid", gap: 16 }}
           >
+            <div className="wb-header">
+              <div>
+                <h1 className="wb-title">ConsentLedger · Security Lab</h1>
+                <p className="wb-subtitle">
+                  Reproducible adversarial attacks, zero-capture verification, and offline evidence
+                  auditing.
+                </p>
+              </div>
+            </div>
             <SecurityLabPanel scenarios={labScenarios} api={dashboardApi} />
             <OfflineVerifierView api={dashboardApi} />
           </div>
@@ -353,6 +455,14 @@ export function AgentWorkbench(props: AgentWorkbenchProps) {
             aria-labelledby="tab-agent"
             style={{ display: "grid", gap: 16 }}
           >
+            <div className="wb-header">
+              <div>
+                <h1 className="wb-title">ConsentLedger · Agent Workbench</h1>
+                <p className="wb-subtitle">
+                  The agent proposes. You sign with a passkey. PayPal settles.
+                </p>
+              </div>
+            </div>
             <StageRail flow={flow} />
 
             <div className="wb-grid">
@@ -405,7 +515,7 @@ export function AgentWorkbench(props: AgentWorkbenchProps) {
                           <input
                             id="display-name"
                             className="input"
-                            value={displayName}
+                            value={passkeyName}
                             autoComplete="off"
                             aria-invalid={fieldErrors.displayName !== undefined}
                             aria-describedby={
@@ -413,7 +523,7 @@ export function AgentWorkbench(props: AgentWorkbenchProps) {
                                 ? "display-name-error"
                                 : undefined
                             }
-                            onChange={(e) => setDisplayName(e.target.value)}
+                            onChange={(e) => setPasskeyName(e.target.value)}
                           />
                           {fieldErrors.displayName !== undefined && (
                             <p id="display-name-error" className="field__error" role="alert">
@@ -457,14 +567,24 @@ export function AgentWorkbench(props: AgentWorkbenchProps) {
                           🔒 <strong>Gate Guardrail:</strong> Max{" "}
                           {formatMinorUnits(policyConfig.maxPerTxMinor, "USD")} per purchase.
                         </span>
-                        <button
-                          type="button"
-                          className="btn"
-                          style={{ minHeight: 28, padding: "2px 8px", fontSize: 11 }}
-                          onClick={() => setIsPolicyModalOpen(true)}
-                        >
-                          Change Cap
-                        </button>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button
+                            type="button"
+                            className="btn"
+                            style={{ minHeight: 28, padding: "2px 8px", fontSize: 11 }}
+                            onClick={() => setIsSpecModalOpen(true)}
+                          >
+                            ✨ Custom Sourcing
+                          </button>
+                          <button
+                            type="button"
+                            className="btn"
+                            style={{ minHeight: 28, padding: "2px 8px", fontSize: 11 }}
+                            onClick={() => setIsPolicyModalOpen(true)}
+                          >
+                            Change Cap
+                          </button>
+                        </div>
                       </div>
 
                       <form
@@ -514,8 +634,21 @@ export function AgentWorkbench(props: AgentWorkbenchProps) {
                                     onClick={() => checkout.setPrompt(s.prompt)}
                                     aria-label={`Select ${s.title} for ${formatMinorUnits(s.priceMinor, "USD")}`}
                                   >
+                                    <div className="studio-chip-header">
+                                      <span className="studio-chip-badge">{s.badge}</span>
+                                      <span className="studio-chip-rating" title={s.reviews}>
+                                        {s.rating}
+                                      </span>
+                                    </div>
                                     <div className="studio-chip-title">
-                                      {s.icon} {s.title}
+                                      <span className="studio-chip-icon">{s.icon}</span> {s.title}
+                                    </div>
+                                    <div className="studio-chip-specs">
+                                      {s.specs.slice(0, 2).map((spec) => (
+                                        <span key={spec} className="studio-chip-spec-pill">
+                                          {spec}
+                                        </span>
+                                      ))}
                                     </div>
                                     <div className="studio-chip-meta">
                                       <span className="studio-chip-price">
@@ -551,12 +684,212 @@ export function AgentWorkbench(props: AgentWorkbenchProps) {
                             </li>
                           ))}
                         </ul>
-                        <div className="actions">
-                          <button type="submit" className="btn btn--primary" disabled={busy}>
+                        <div
+                          className="actions"
+                          style={{ display: "flex", flexWrap: "wrap", gap: 10 }}
+                        >
+                          <button
+                            type="button"
+                            className="btn btn--secondary"
+                            disabled={busy || isSearching}
+                            onClick={() => void handleSearchCatalog(flow.prompt)}
+                          >
+                            🔍 Search Store Catalog (Channel3)
+                          </button>
+                          <button
+                            type="submit"
+                            className="btn btn--primary"
+                            disabled={busy || isSearching}
+                          >
                             Ask the agent
                           </button>
                         </div>
                       </form>
+
+                      {/* Active live catalog search scanning */}
+                      {isSearching && (
+                        <div style={{ marginTop: 16 }}>
+                          <SearchingAnimation queryPrompt={flow.prompt || "stores"} />
+                        </div>
+                      )}
+
+                      {/* Search Error Notice */}
+                      {searchError && (
+                        <p className="notice notice--amber" style={{ marginTop: 12 }}>
+                          {searchError}
+                        </p>
+                      )}
+
+                      {/* Discovered Products Grid */}
+                      {searchResults.length > 0 && (
+                        <div style={{ marginTop: 20, display: "grid", gap: 14 }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                            }}
+                          >
+                            <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0 }}>
+                              🛍️ Live Store Items via Channel3 ({searchResults.length})
+                            </h3>
+                            <button
+                              type="button"
+                              className="btn"
+                              style={{ padding: "2px 8px", fontSize: 11 }}
+                              onClick={() => setSearchResults([])}
+                            >
+                              Clear
+                            </button>
+                          </div>
+
+                          <div
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+                              gap: 12,
+                            }}
+                          >
+                            {searchResults.map((item) => {
+                              const isWithinCap = item.priceMinor <= policyConfig.maxPerTxMinor;
+                              return (
+                                <article
+                                  key={item.sku}
+                                  className="product-card-hero"
+                                  style={{ padding: 14, gap: 10 }}
+                                >
+                                  <div className="product-card-top-row">
+                                    <span className="product-source-badge">
+                                      <span className="source-dot" />
+                                      {item.source === "channel3"
+                                        ? "Channel3 Real Inventory"
+                                        : "Verified Store"}
+                                    </span>
+                                    <span className="product-merchant-pill">
+                                      {item.merchantDisplayName}
+                                    </span>
+                                  </div>
+
+                                  <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                                    <div
+                                      style={{
+                                        width: 72,
+                                        height: 72,
+                                        minWidth: 72,
+                                        borderRadius: 8,
+                                        overflow: "hidden",
+                                        background: "var(--cl-surface-inset)",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                      }}
+                                    >
+                                      {item.imageUrl ? (
+                                        <img
+                                          src={item.imageUrl}
+                                          alt={item.title}
+                                          style={{
+                                            width: "100%",
+                                            height: "100%",
+                                            objectFit: "cover",
+                                          }}
+                                        />
+                                      ) : (
+                                        <span style={{ fontSize: 28 }}>📦</span>
+                                      )}
+                                    </div>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      {item.brand && (
+                                        <span
+                                          style={{
+                                            fontSize: 11,
+                                            color: "var(--cl-ink-dim)",
+                                            display: "block",
+                                          }}
+                                        >
+                                          {item.brand}
+                                        </span>
+                                      )}
+                                      <h4
+                                        style={{
+                                          fontSize: 13,
+                                          fontWeight: 600,
+                                          margin: "2px 0 4px",
+                                          whiteSpace: "nowrap",
+                                          overflow: "hidden",
+                                          textOverflow: "ellipsis",
+                                        }}
+                                        title={item.title}
+                                      >
+                                        {item.title}
+                                      </h4>
+                                      <div
+                                        style={{ display: "flex", alignItems: "baseline", gap: 6 }}
+                                      >
+                                        <span
+                                          style={{
+                                            fontSize: 15,
+                                            fontWeight: 800,
+                                            color: "var(--cl-ink)",
+                                          }}
+                                        >
+                                          {formatMinorUnits(item.priceMinor, "USD")}
+                                        </span>
+                                        <span
+                                          className={
+                                            isWithinCap
+                                              ? "studio-chip-status--within"
+                                              : "studio-chip-status--exceeds"
+                                          }
+                                          style={{ fontSize: 10.5 }}
+                                        >
+                                          {isWithinCap ? "✓ Within Cap" : "⚠️ Exceeds Cap"}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div style={{ marginTop: 4, display: "flex", gap: 8 }}>
+                                    <button
+                                      type="button"
+                                      className="btn btn--primary"
+                                      style={{
+                                        flex: 1,
+                                        padding: "6px 10px",
+                                        fontSize: 12,
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        gap: 6,
+                                      }}
+                                      disabled={busy}
+                                      onClick={() => {
+                                        const buyPrompt = `Order ${item.title} from ${item.merchantDisplayName} for ${formatMinorUnits(item.priceMinor, "USD")}`;
+                                        checkout.setPrompt(buyPrompt);
+                                        void checkout.propose(activePolicyDoc, buyPrompt);
+                                      }}
+                                    >
+                                      🔒 Buy with ConsentLedger
+                                    </button>
+                                    {item.buyUrl && (
+                                      <a
+                                        href={item.buyUrl}
+                                        target="_blank"
+                                        rel="noreferrer noopener"
+                                        className="btn"
+                                        style={{ padding: "6px 8px", fontSize: 11 }}
+                                        title="View on merchant website"
+                                      >
+                                        Store ↗
+                                      </a>
+                                    )}
+                                  </div>
+                                </article>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </section>
                   </>
                 )}
@@ -575,17 +908,7 @@ export function AgentWorkbench(props: AgentWorkbenchProps) {
                   </section>
                 )}
 
-                {flow.stage === "proposing" && (
-                  <section className="panel" aria-labelledby="proposing-heading">
-                    <h2 id="proposing-heading" className="panel__title">
-                      The agent is working
-                    </h2>
-                    <p className="progress" role="status">
-                      <span className="spinner" aria-hidden="true" />
-                      Searching the catalog and drafting a proposal for “{flow.prompt.trim()}”…
-                    </p>
-                  </section>
-                )}
+                {flow.stage === "proposing" && <SearchingAnimation queryPrompt={flow.prompt} />}
 
                 {flow.stage === "review" && (
                   <section className="panel" aria-labelledby="review-heading">
@@ -601,6 +924,35 @@ export function AgentWorkbench(props: AgentWorkbenchProps) {
                       The paper mandate shows the exact terms. Approving binds your passkey to this
                       mandate and nothing else. <strong>No payment happens at this step.</strong>
                     </p>
+
+                    {!state.passkeyRegistered && (
+                      <div
+                        className="notice notice--amber"
+                        style={{
+                          margin: "12px 0",
+                          fontSize: 13,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: 12,
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <div>
+                          <strong>Passkey Required:</strong> Register this device's passkey (Windows
+                          Hello / Touch ID / Security Key) to sign the mandate.
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn--secondary"
+                          style={{ fontSize: 12, padding: "4px 10px", whiteSpace: "nowrap" }}
+                          onClick={() => void checkout.registerPasskey("Alex Vance (Device)")}
+                        >
+                          🔑 Register Passkey Now
+                        </button>
+                      </div>
+                    )}
+
                     <p className="panel__text">
                       Total to approve:{" "}
                       <strong>
@@ -661,10 +1013,10 @@ export function AgentWorkbench(props: AgentWorkbenchProps) {
                     config={config}
                     configError={configError}
                     paypal={paypal}
-                    onApproved={() => void checkout.onPayPalApproved()}
+                    onApproved={handlePayPalApproved}
                     onCancelled={checkout.onPayPalCancelled}
                     onError={checkout.onPayPalError}
-                    onSimulatedApproval={() => void checkout.simulateApproval()}
+                    onSimulatedApproval={handleSimulatedApproval}
                   />
                 )}
 
@@ -764,15 +1116,28 @@ export function AgentWorkbench(props: AgentWorkbenchProps) {
                   </div>
                 )}
                 {proposal !== undefined ? (
-                  <MandateCard
-                    proposal={proposal}
-                    consent={"consent" in context ? context.consent : undefined}
-                    signature={signature}
-                    signingStep={context.stage === "signing" ? context.step : undefined}
-                    consentFailed={flow.stage === "failed" && flow.failure.category === "consent"}
-                    nowMs={nowMs}
-                    catalogLabel={catalogLabel(config)}
-                  />
+                  <>
+                    <ProductResultCard
+                      proposal={proposal}
+                      consent={"consent" in context ? context.consent : undefined}
+                      signature={signature}
+                      signingStep={context.stage === "signing" ? context.step : undefined}
+                      consentFailed={flow.stage === "failed" && flow.failure.category === "consent"}
+                      nowMs={nowMs}
+                      catalogLabel={catalogLabel(config)}
+                      onApprove={() => void checkout.signMandate()}
+                      isSigning={busy}
+                    />
+                    <MandateCard
+                      proposal={proposal}
+                      consent={"consent" in context ? context.consent : undefined}
+                      signature={signature}
+                      signingStep={context.stage === "signing" ? context.step : undefined}
+                      consentFailed={flow.stage === "failed" && flow.failure.category === "consent"}
+                      nowMs={nowMs}
+                      catalogLabel={catalogLabel(config)}
+                    />
+                  </>
                 ) : (
                   <section className="mandate mandate--empty" aria-labelledby="empty-mandate">
                     <h2 id="empty-mandate" className="panel__title">
@@ -795,6 +1160,48 @@ export function AgentWorkbench(props: AgentWorkbenchProps) {
           currentConfig={policyConfig}
           onClose={() => setIsPolicyModalOpen(false)}
           onSave={handleSavePolicy}
+        />
+
+        <PurchaseRequestModal
+          isOpen={isSpecModalOpen}
+          onClose={() => setIsSpecModalOpen(false)}
+          policyConfig={policyConfig}
+          onApply={(formattedPrompt: string) => {
+            setIsSpecModalOpen(false);
+            setActiveSurface("agent");
+            checkout.setPrompt(formattedPrompt);
+            void checkout.propose(activePolicyDoc, formattedPrompt);
+          }}
+          onSearch={(searchQuery: string) => {
+            setIsSpecModalOpen(false);
+            setActiveSurface("agent");
+            checkout.setPrompt(searchQuery);
+            void handleSearchCatalog(searchQuery);
+          }}
+        />
+
+        <DemoAuthModal
+          isOpen={isAuthModalOpen}
+          currentName={displayName}
+          currentPolicy={policyConfig}
+          onClose={() => setIsAuthModalOpen(false)}
+          onSaveSession={(name, newConfig, doc) => {
+            setDisplayName(name);
+            setPolicyConfig(newConfig);
+            setActivePolicyDoc(doc);
+            void dashboardApi
+              .getOverview()
+              .then(setOverview)
+              .catch(() => {});
+            void dashboardApi
+              .getTimeline()
+              .then((tl) => setTimelineEvents(tl.events))
+              .catch(() => {});
+            void dashboardApi
+              .getBlockedAttempts()
+              .then((ba) => setBlockedAttempts(ba.attempts))
+              .catch(() => {});
+          }}
         />
 
         <div className="sr-only" role="status" aria-live="polite">

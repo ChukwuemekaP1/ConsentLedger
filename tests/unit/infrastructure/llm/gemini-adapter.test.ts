@@ -109,9 +109,12 @@ describe("GeminiLlmClient (llm.invalid-output.test)", () => {
       }
 
       // Second turn: verify client sent functionResponse with search results
-      const functionResponsePart = (req.contents as Array<{ role: string }>).find(
-        (c) => c.role === "function",
-      );
+      const functionResponsePart = (
+        req.contents as Array<{
+          role: string;
+          parts: Array<{ functionResponse?: unknown }>;
+        }>
+      ).find((c) => c.role === "user" && c.parts[0]?.functionResponse !== undefined);
       expect(functionResponsePart).toBeDefined();
 
       return new Response(
@@ -209,7 +212,7 @@ describe("GeminiLlmClient (llm.invalid-output.test)", () => {
           role: string;
           parts: Array<{ functionResponse?: { name: string } }>;
         }>
-      ).find((c) => c.role === "function" && c.parts[0]?.functionResponse?.name === "propose_cart");
+      ).find((c) => c.role === "user" && c.parts[0]?.functionResponse?.name === "propose_cart");
       expect(functionResponsePart).toBeDefined();
 
       // Return corrected proposal

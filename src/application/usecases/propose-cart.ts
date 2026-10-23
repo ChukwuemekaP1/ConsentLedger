@@ -12,6 +12,7 @@ import type { KeyObject } from "node:crypto";
 import { type Result, ok, err } from "../../domain/shared/result.js";
 import type { Clock, IdGenerator, Uuid } from "../../domain/shared/clock.js";
 import type { LlmClient, PurchaseProposal, ProductCatalog } from "../ports/index.js";
+import type { ProductItem, SearchProductsOptions } from "../ports/catalog-port.js";
 import type { MandateRepo } from "../ports/mandate-repo.js";
 import type { StoredMandateRecord } from "../../domain/gate/gate.js";
 import {
@@ -39,10 +40,56 @@ export interface ProposeCartInput {
   readonly agentId?: string;
 }
 
+/**
+ * Display-only product facts for the UI (image, store link, brand).
+ * Deliberately NOT part of the signed mandate terms: the passkey signs `terms` only (I-02).
+ */
+export interface ProposedProductView {
+  readonly sku: string;
+  readonly title: string;
+  readonly merchantDisplayName: string;
+  readonly imageUrl?: string;
+  readonly buyUrl?: string;
+  readonly brand?: string;
+}
+
 export interface ProposeCartOutput {
   readonly mandate: StoredMandateRecord;
   readonly proposal: PurchaseProposal;
   readonly evaluation: PolicyEvaluation;
+  readonly products: readonly ProposedProductView[];
+}
+
+/**
+ * Wraps the catalog so we remember every item the agent actually saw.
+ * Lets us show real product imagery without a second round-trip to the store API.
+ */
+class RecordingCatalog implements ProductCatalog {
+  readonly seen = new Map<string, ProductItem>();
+  constructor(private readonly inner: ProductCatalog) {}
+
+  async search(query: string, options?: SearchProductsOptions): Promise<readonly ProductItem[]> {
+    const items = await this.inner.search(query, options);
+    for (const item of items) this.seen.set(item.sku, item);
+    return items;
+  }
+
+  async getDetails(sku: string): Promise<ProductItem | null> {
+    const item = await this.inner.getDetails(sku);
+    if (item) this.seen.set(item.sku, item);
+    return item;
+  }
+}
+
+function toProductView(item: ProductItem): ProposedProductView {
+  return {
+    sku: item.sku,
+    title: item.title,
+    merchantDisplayName: item.merchantDisplayName,
+    ...(item.imageUrl !== undefined ? { imageUrl: item.imageUrl } : {}),
+    ...(item.buyUrl !== undefined ? { buyUrl: item.buyUrl } : {}),
+    ...(item.brand !== undefined ? { brand: item.brand } : {}),
+  };
 }
 
 export type ProposeCartErrorKind =
@@ -84,7 +131,8 @@ export class ProposeCartUseCase {
     }
 
     // 2. Invoke AI Proposal Agent
-    const llmResult = await this.llmClient.generateProposal(input.prompt, this.catalog);
+    const recordingCatalog = new RecordingCatalog(this.catalog);
+    const llmResult = await this.llmClient.generateProposal(input.prompt, recordingCatalog);
     if (!llmResult.ok) {
       return err({
         kind: "LLM_ERROR",
@@ -245,10 +293,17 @@ export class ProposeCartUseCase {
       });
     }
 
+    const products: ProposedProductView[] = [];
+    for (const item of proposal.items) {
+      const seen = recordingCatalog.seen.get(item.sku);
+      if (seen) products.push(toProductView(seen));
+    }
+
     return ok({
       mandate: storedRecord,
       proposal,
       evaluation,
+      products,
     });
   }
 }

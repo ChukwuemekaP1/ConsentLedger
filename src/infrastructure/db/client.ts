@@ -8,6 +8,7 @@
 import postgres from "postgres";
 import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from "./schema/index.js";
+import { installResilientDns } from "../config/dns.js";
 
 export type Database = PostgresJsDatabase<typeof schema>;
 
@@ -22,8 +23,11 @@ export function createDatabaseClient(cfg: DbClientConfig): {
   readonly sql: postgres.Sql;
   readonly close: () => Promise<void>;
 } {
+  installResilientDns();
+
   const sql = postgres(cfg.connectionString, {
     max: cfg.max ?? 10,
+    prepare: false, // Required for Neon PgBouncer connection pooling
     connect_timeout: 10,
     idle_timeout: 20,
     max_lifetime: 60 * 30,

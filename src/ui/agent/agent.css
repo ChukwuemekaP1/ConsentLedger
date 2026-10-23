@@ -13,7 +13,24 @@
   --font-ui: Inter, Geist, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   min-height: 100dvh;
-  background: var(--ink);
+  background:
+    radial-gradient(
+      ellipse at 15% 0%,
+      var(--wb-glow-1, rgba(90, 169, 255, 0.09)) 0%,
+      transparent 45%
+    ),
+    radial-gradient(
+      ellipse at 85% 10%,
+      var(--wb-glow-2, rgba(61, 220, 151, 0.08)) 0%,
+      transparent 45%
+    ),
+    radial-gradient(
+      ellipse at 50% 85%,
+      var(--wb-glow-3, rgba(139, 92, 246, 0.06)) 0%,
+      transparent 45%
+    ),
+    var(--wb-bg, linear-gradient(180deg, #07090c 0%, #0b0e14 100%));
+  background-attachment: fixed;
   color: var(--text);
   font-family: var(--font-ui);
   font-size: 14px;
@@ -184,15 +201,17 @@
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
-  padding: 16px;
+  padding: 18px;
   display: grid;
   gap: 12px;
+  box-shadow: var(--cl-shadow-sm, 0 4px 16px rgba(0, 0, 0, 0.08));
 }
 
 .panel__title {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
+  color: var(--text);
 }
 
 .panel__title:focus-visible {
@@ -209,6 +228,20 @@
   color: var(--text);
 }
 
+.skeleton-pulse {
+  animation: skeleton-glow 1.8s ease-in-out infinite;
+}
+
+@keyframes skeleton-glow {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
 .field {
   display: grid;
   gap: 4px;
@@ -217,6 +250,7 @@
 .field__label {
   font-size: 13px;
   font-weight: 500;
+  color: var(--text);
 }
 
 .field__hint,
@@ -236,9 +270,9 @@
 .input {
   width: 100%;
   padding: 8px 12px;
-  background: var(--ink);
+  background: var(--input-bg, var(--ink));
   color: var(--text);
-  border: 1px solid var(--line);
+  border: 1px solid var(--input-border, var(--line));
   border-radius: var(--radius-control);
   font: inherit;
   min-height: 44px;
@@ -274,9 +308,15 @@ textarea.input {
 }
 
 .btn--primary {
-  background: var(--seal);
-  border-color: var(--seal);
-  color: var(--ink);
+  background: linear-gradient(135deg, #1d6b49 0%, #2ea06f 100%);
+  border-color: rgba(61, 220, 151, 0.5);
+  color: #ffffff;
+  box-shadow: 0 0 16px rgba(61, 220, 151, 0.22);
+}
+
+.btn--primary:hover:not(:disabled) {
+  box-shadow: 0 0 24px rgba(61, 220, 151, 0.4);
+  transform: translateY(-1px);
 }
 
 .btn:disabled {

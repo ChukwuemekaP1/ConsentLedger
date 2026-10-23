@@ -7,5 +7,5 @@ import "../ui/agent/agent.css";
 import { AgentWorkbench } from "../ui/agent/AgentWorkbench.js";
 
 export default function HomePage() {
-  return <AgentWorkbench />;
+  return <AgentWorkbench initialSurface="home" />;
 }

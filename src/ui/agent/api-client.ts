@@ -28,11 +28,13 @@ import {
   ProblemSchema,
   ProposalResponseSchema,
   RegistrationResponseSchema,
+  ProductSearchResponseSchema,
   type CaptureResponse,
   type ClientConfig,
   type ConsentVerifyResponse,
   type OrderResponse,
   type ProposalResponse,
+  type ProductSearchResponse,
 } from "./api-schemas.js";
 import type { PolicyDocument } from "../../domain/policy/policy.js";
 
@@ -108,6 +110,7 @@ export interface AgentApi {
     displayName: string,
   ): Promise<ApiResult<{ principalId: string; credentialId: string }>>;
   propose(prompt: string, policy?: PolicyDocument): Promise<ApiResult<ProposalResponse>>;
+  searchProducts(query: string, limit?: number): Promise<ApiResult<ProductSearchResponse>>;
   requestConsentOptions(
     mandateId: string,
   ): Promise<ApiResult<PublicKeyCredentialRequestOptionsJSON>>;
@@ -164,6 +167,14 @@ export function createAgentApi(fetchFn: FetchFn): AgentApi {
         "/api/v1/proposals",
         jsonPost({ prompt, ...(policy !== undefined ? { policy } : {}) }),
         ProposalResponseSchema,
+      ),
+
+    searchProducts: (query, limit) =>
+      call(
+        fetchFn,
+        `/api/v1/products/search?q=${encodeURIComponent(query)}${limit !== undefined ? `&limit=${limit}` : ""}`,
+        { method: "GET" },
+        ProductSearchResponseSchema,
       ),
 
     async requestConsentOptions(mandateId) {

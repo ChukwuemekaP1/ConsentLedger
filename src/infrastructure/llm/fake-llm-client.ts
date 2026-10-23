@@ -20,6 +20,20 @@ export interface FakeLlmClientConfig {
   readonly simulateToolCalls?: boolean;
 }
 
+function extractPriceMinor(prompt: string, fallbackMinor = 8500): number {
+  const dollarMatch = prompt.match(/\$(\d+(?:\.\d{1,2})?)/);
+  if (dollarMatch && dollarMatch[1]) {
+    const parsed = parseFloat(dollarMatch[1]);
+    if (!isNaN(parsed) && parsed > 0) return Math.round(parsed * 100);
+  }
+  const forMatch = prompt.match(/(?:for|at|price|cost)\s+(\d+(?:\.\d{1,2})?)/i);
+  if (forMatch && forMatch[1]) {
+    const parsed = parseFloat(forMatch[1]);
+    if (!isNaN(parsed) && parsed > 0) return Math.round(parsed * 100);
+  }
+  return fallbackMinor;
+}
+
 export class FakeLlmClient implements LlmClient {
   constructor(private readonly config: FakeLlmClientConfig = {}) {}
 
@@ -37,6 +51,47 @@ export class FakeLlmClient implements LlmClient {
     }
 
     const lower = prompt.toLowerCase();
+
+    // Check for structured spec metadata from the Product Specification Modal
+    const specMatch = prompt.match(
+      /\[SPEC:\s*brand="([^"]*)"\s*item="([^"]*)"\s*specs="([^"]*)"\s*price="([^"]*)"\s*merchant="([^"]*)"\]/,
+    );
+    if (specMatch) {
+      const brand = specMatch[1] || "Universal";
+      const itemTitle = specMatch[2] || "Custom Product";
+      const itemSpecs = specMatch[3] || "";
+      const priceRaw = parseFloat(specMatch[4] || "85.00");
+      const merchantName = specMatch[5] || "ShopX";
+      const amountMinor = Math.round((isNaN(priceRaw) || priceRaw <= 0 ? 85 : priceRaw) * 100);
+      const merchantId =
+        merchantName
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, "-")
+          .replace(/^-+|-+$/g, "") || "shopx";
+      const sku = (itemTitle.slice(0, 3) + "-" + Math.abs(amountMinor % 999)).toUpperCase();
+      const fullDesc = `${brand !== "Universal" && !itemTitle.includes(brand) ? brand + " " : ""}${itemTitle}${itemSpecs ? " (" + itemSpecs + ")" : ""}`;
+
+      return ok({
+        payee: {
+          merchantId,
+          displayName: merchantName,
+        },
+        payment: {
+          amountMinor,
+          currency: "USD",
+        },
+        items: [
+          {
+            sku,
+            description: fullDesc,
+            quantity: 1,
+            unitAmountMinor: amountMinor,
+          },
+        ],
+        promptPlayback: `Order ${fullDesc} for $${(amountMinor / 100).toFixed(2)} from ${merchantName}`,
+        rationale: `Selected ${fullDesc} ($${(amountMinor / 100).toFixed(2)}) from verified merchant ${merchantName} based on exact sourcing parameters. Evaluated against active catalog inventory for verified merchant rating, high reliability, and policy alignment.`,
+      });
+    }
 
     // Support simulated tool calls against the catalog if enabled
     if (this.config.simulateToolCalls) {
@@ -221,27 +276,188 @@ export class FakeLlmClient implements LlmClient {
       });
     }
 
-    // Default: Mechanical keyboard from ShopX ($85.00)
+    // Desktop / PC prompt
+    if (lower.includes("desktop") || lower.includes("pc") || lower.includes("optiplex")) {
+      const desktopPrice = extractPriceMinor(prompt, 45000);
+      return ok({
+        payee: {
+          merchantId: "shopx",
+          displayName: "ShopX",
+        },
+        payment: {
+          amountMinor: desktopPrice,
+          currency: "USD",
+        },
+        items: [
+          {
+            sku: "PC-DESK-DELL",
+            description: "Dell OptiPlex Desktop Workstation (Intel Core i7, 32GB RAM, 1TB SSD)",
+            quantity: 1,
+            unitAmountMinor: desktopPrice,
+          },
+        ],
+        promptPlayback: `Buy Dell Desktop Workstation for $${(desktopPrice / 100).toFixed(2)}: ${prompt}`,
+        rationale: `Selected Dell OptiPlex Enterprise Desktop Workstation ($${(desktopPrice / 100).toFixed(2)}) from verified merchant ShopX. Configured with 13th Gen Intel Core i7, 32GB high-speed DDR5 RAM, 1TB NVMe PCIe SSD, and dual DisplayPort outputs. Compared against budget mini-PCs that suffer from thermal throttling under sustained load, and overpriced boutique gaming rigs with unnecessary GPU markups, this workstation delivers enterprise-tier multi-threaded productivity and 3-year commercial reliability.`,
+      });
+    }
+
+    // Mouse prompt
+    if (lower.includes("mouse")) {
+      const mousePrice = extractPriceMinor(prompt, 4500);
+      return ok({
+        payee: {
+          merchantId: "shopx",
+          displayName: "ShopX",
+        },
+        payment: {
+          amountMinor: mousePrice,
+          currency: "USD",
+        },
+        items: [
+          {
+            sku: "MS-LOGI-MX",
+            description: "Wireless Ergonomic Precision Mouse (8000 DPI, Quiet Clicks)",
+            quantity: 1,
+            unitAmountMinor: mousePrice,
+          },
+        ],
+        promptPlayback: `Order wireless ergonomic mouse for $${(mousePrice / 100).toFixed(2)}: ${prompt}`,
+        rationale: `Selected Wireless Ergonomic Precision Mouse ($${(mousePrice / 100).toFixed(2)}) from ShopX. Features contoured palm support, silent tactile switches, high-precision optical tracking on any surface, and 70-day rechargeable battery life. Compared against generic office mice ($15–$25) with high latency and wrist strain, this mouse provides superior ergonomic comfort and verified durable switches at optimal cost.`,
+      });
+    }
+
+    // Chair prompt
+    if (lower.includes("chair")) {
+      const chairPrice = extractPriceMinor(prompt, 12000);
+      return ok({
+        payee: {
+          merchantId: "office-plus",
+          displayName: "Office Plus",
+        },
+        payment: {
+          amountMinor: chairPrice,
+          currency: "USD",
+        },
+        items: [
+          {
+            sku: "CHR-ERGO-01",
+            description: "High-Back Ergonomic Mesh Task Chair with Lumbar Support",
+            quantity: 1,
+            unitAmountMinor: chairPrice,
+          },
+        ],
+        promptPlayback: `Order ergonomic task chair for $${(chairPrice / 100).toFixed(2)}: ${prompt}`,
+        rationale: `Selected High-Back Ergonomic Mesh Task Chair ($${(chairPrice / 100).toFixed(2)}) from Office Plus. Features dynamic 3D lumbar support, breathable Korean filament mesh, adjustable 3D armrests, and Class-4 heavy-duty gas cylinder rated up to 150kg. Compared against foam chairs ($60–$80) that sag within months, this mesh chair ensures thermal comfort and spine alignment throughout full workdays.`,
+      });
+    }
+
+    // Laptop prompt
+    if (lower.includes("laptop") || lower.includes("macbook") || lower.includes("notebook")) {
+      const laptopPrice = extractPriceMinor(prompt, 65000);
+      return ok({
+        payee: {
+          merchantId: "shopx",
+          displayName: "ShopX",
+        },
+        payment: {
+          amountMinor: laptopPrice,
+          currency: "USD",
+        },
+        items: [
+          {
+            sku: "LPT-14-PRO",
+            description: 'Business Ultrabook 14" (Intel Core i5, 16GB RAM, 512GB SSD)',
+            quantity: 1,
+            unitAmountMinor: laptopPrice,
+          },
+        ],
+        promptPlayback: `Order business ultrabook for $${(laptopPrice / 100).toFixed(2)}: ${prompt}`,
+        rationale: `Selected 14-inch Business Ultrabook ($${(laptopPrice / 100).toFixed(2)}) from ShopX. Weighs only 1.2kg with CNC aluminum unibody, anti-glare FHD IPS panel, 12-hour battery life, and rapid Thunderbolt 4 charging. Compared against bulky budget plastic laptops, this ultrabook offers premium portability and executive build quality.`,
+      });
+    }
+
+    // Standing desk prompt
+    if (lower.includes("standing desk") || (lower.includes("desk") && !lower.includes("desktop"))) {
+      const deskPrice = extractPriceMinor(prompt, 22000);
+      return ok({
+        payee: {
+          merchantId: "office-plus",
+          displayName: "Office Plus",
+        },
+        payment: {
+          amountMinor: deskPrice,
+          currency: "USD",
+        },
+        items: [
+          {
+            sku: "DSK-STAND-01",
+            description: 'Dual-Motor Electric Standing Desk 60x30" (Anti-Collision Sensor)',
+            quantity: 1,
+            unitAmountMinor: deskPrice,
+          },
+        ],
+        promptPlayback: `Order dual-motor electric standing desk for $${(deskPrice / 100).toFixed(2)}: ${prompt}`,
+        rationale: `Selected Dual-Motor Electric Standing Desk ($${(deskPrice / 100).toFixed(2)}) from Office Plus. Dual heavy-duty motors provide silent <45dB lift, 4 programmable memory heights, integrated gyro anti-collision, and solid engineered wood desktop. Outclasses single-motor wobbly frames at a fraction of boutique furniture store costs.`,
+      });
+    }
+
+    // Keyboard prompt
+    const isKeyboard = lower.includes("keyboard") || lower.includes("keycap");
+    if (isKeyboard) {
+      return ok({
+        payee: {
+          merchantId: "shopx",
+          displayName: "ShopX",
+        },
+        payment: {
+          amountMinor: 8500, // $85.00
+          currency: "USD",
+        },
+        items: [
+          {
+            sku: "KB-75",
+            description: "75% Mechanical Keyboard",
+            quantity: 1,
+            unitAmountMinor: 8500,
+          },
+        ],
+        promptPlayback: lower.includes("keycap")
+          ? "Buy a keyboard and keycaps"
+          : `Buy the 75% keyboard from ShopX for $85.00: ${prompt}`,
+        rationale:
+          "Selected 75% Mechanical Keyboard ($85.00) from verified merchant ShopX. Features a compact 82-key space-saving layout, factory pre-lubricated tactile mechanical switches, hot-swappable 5-pin PCB, double-shot PBT keycaps resistant to shine, and multi-layer EVA acoustic dampening foam. Compared against disposable membrane office keyboards ($30–$45) that degrade within months and lack tactile precision, and custom enthusiast assemblies ($200+) with steep diminishing returns, this keyboard achieves 90% of custom-grade sound and feel. At $85.00, it provides maximum ergonomic comfort and proven durability while remaining safely under your spending cap.",
+      });
+    }
+
+    // Dynamic extraction for any free-form user query!
+    const cleanTitle = prompt
+      .replace(/^(?:i\s+want\s+to\s+buy|buy|order|purchase|get|find|source)\s+/i, "")
+      .replace(/\s+(?:for|at)\s+\$?\d+.*$/i, "")
+      .trim();
+    const finalTitle = cleanTitle
+      ? cleanTitle.charAt(0).toUpperCase() + cleanTitle.slice(1)
+      : "Requested Catalog Item";
+    const dynamicPriceMinor = extractPriceMinor(prompt, 8500);
+
     return ok({
       payee: {
         merchantId: "shopx",
         displayName: "ShopX",
       },
       payment: {
-        amountMinor: 8500, // $85.00
+        amountMinor: dynamicPriceMinor,
         currency: "USD",
       },
       items: [
         {
-          sku: "KB-75",
-          description: "75% Mechanical Keyboard",
+          sku: `ITEM-${Math.abs(dynamicPriceMinor % 999)}`,
+          description: finalTitle,
           quantity: 1,
-          unitAmountMinor: 8500,
+          unitAmountMinor: dynamicPriceMinor,
         },
       ],
-      promptPlayback: `Buy the 75% keyboard from ShopX for $85.00: ${prompt}`,
-      rationale:
-        "Selected 75% Mechanical Keyboard ($85.00) from verified merchant ShopX. Features a compact 82-key space-saving layout, factory pre-lubricated tactile mechanical switches, hot-swappable 5-pin PCB, double-shot PBT keycaps resistant to shine, and multi-layer EVA acoustic dampening foam. Compared against disposable membrane office keyboards ($30–$45) that degrade within months and lack tactile precision, and custom enthusiast assemblies ($200+) with steep diminishing returns, this keyboard achieves 90% of custom-grade sound and feel. At $85.00, it provides maximum ergonomic comfort and proven durability while remaining safely under your spending cap.",
+      promptPlayback: `Order ${finalTitle} for $${(dynamicPriceMinor / 100).toFixed(2)}: ${prompt}`,
+      rationale: `Selected ${finalTitle} ($${(dynamicPriceMinor / 100).toFixed(2)}) from verified merchant ShopX matching your specific search query. Sourced directly based on prompt parameters with verified merchant standing and complete dual-custody protection.`,
     });
   }
 }

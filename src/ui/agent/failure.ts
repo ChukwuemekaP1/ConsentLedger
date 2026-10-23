@@ -13,6 +13,10 @@ export type FailureCategory =
   | "consent"
   | "passkey"
   | "provider"
+  /** The AI shopping assistant was busy, out of quota, or could not finish. Never a payment problem. */
+  | "assistant"
+  /** Real stores (Channel3) could not be reached; nothing was substituted. */
+  | "stores"
   | "network"
   | "validation"
   | "unexpected";
@@ -69,8 +73,17 @@ export function failureFromProblem(problem: ProblemInput): Failure {
   };
   const code = problem.code ?? inferCode(problem);
 
-  if (code === "UNAUTHENTICATED") {
-    return { ...base, category: "auth", code, retryable: false };
+  if (code === "UNAUTHENTICATED" || problem.status === 401) {
+    return {
+      ...base,
+      category: "auth",
+      code: "UNAUTHENTICATED",
+      detail:
+        problem.detail && problem.detail !== "The server rejected the request."
+          ? problem.detail
+          : "Registration Required: Register your device passkey first in Step 1 to approve.",
+      retryable: false,
+    };
   }
   if (code === "MANDATE_EXPIRED") {
     return { ...base, category: "expired", code, retryable: false };
@@ -85,7 +98,16 @@ export function failureFromProblem(problem: ProblemInput): Failure {
   ) {
     return { ...base, category: "consent", code, retryable: CONSENT_RETRYABLE.has(code) };
   }
-  if (PROVIDER_CODES.has(code) || code === "RATE_LIMITED" || problem.status >= 500) {
+  if (code === "RATE_LIMITED" || code === "AI_PROPOSAL_FAILED") {
+    return { ...base, category: "assistant", code, retryable: true };
+  }
+  if (code === "AI_QUOTA_EXHAUSTED") {
+    return { ...base, category: "assistant", code, retryable: false };
+  }
+  if (code === "CATALOG_UNAVAILABLE") {
+    return { ...base, category: "stores", code, retryable: true };
+  }
+  if (PROVIDER_CODES.has(code) || problem.status >= 500) {
     return { ...base, category: "provider", code, retryable: true };
   }
   if (code === "VALIDATION_FAILED" || code === "NOT_FOUND") {
@@ -96,6 +118,7 @@ export function failureFromProblem(problem: ProblemInput): Failure {
 
 /** Proposal endpoints return problem+json without `code` for policy denial and rate limiting. */
 function inferCode(problem: ProblemInput): string {
+  if (problem.status === 401) return "UNAUTHENTICATED";
   if (problem.status === 429) return "RATE_LIMITED";
   if (problem.status === 422 && problem.reasons !== undefined) return "POLICY_DENIED";
   if (problem.status === 502) return "PROVIDER_ERROR";

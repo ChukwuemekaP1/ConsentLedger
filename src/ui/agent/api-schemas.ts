@@ -15,6 +15,48 @@ const AttestationSchema = z.object({
   signature: z.string(),
 });
 
+/**
+ * Display-only product facts (never signed). Image and store URLs come from an
+ * untrusted catalog, so only https URLs are accepted (TB6); anything else drops the field.
+ */
+const HttpsUrl = z
+  .string()
+  .url()
+  .refine((u) => u.startsWith("https://"), "must be https");
+
+export const ProductViewSchema = z.object({
+  sku: z.string(),
+  title: z.string(),
+  merchantDisplayName: z.string(),
+  imageUrl: HttpsUrl.optional().catch(undefined),
+  buyUrl: HttpsUrl.optional().catch(undefined),
+  brand: z.string().optional(),
+});
+export type ProductView = z.infer<typeof ProductViewSchema>;
+
+export const SearchResultProductSchema = z.object({
+  id: z.string().optional(),
+  sku: z.string(),
+  title: z.string(),
+  description: z.string().optional().default(""),
+  merchantId: z.string().optional().default(""),
+  merchantDisplayName: z.string(),
+  priceMinor: z.number().int(),
+  currency: z.string().optional().default("USD"),
+  imageUrl: HttpsUrl.optional().catch(undefined),
+  buyUrl: HttpsUrl.optional().catch(undefined),
+  brand: z.string().optional(),
+  source: z.string().optional(),
+});
+export type SearchResultProduct = z.infer<typeof SearchResultProductSchema>;
+
+export const ProductSearchResponseSchema = z.object({
+  query: z.string(),
+  count: z.number().int(),
+  products: z.array(SearchResultProductSchema),
+});
+export type ProductSearchResponse = z.infer<typeof ProductSearchResponseSchema>;
+
 export const ProposalResponseSchema = z.object({
   mandate: z.object({
     terms: CartMandateTermsSchema,
@@ -27,6 +69,7 @@ export const ProposalResponseSchema = z.object({
     decision: z.enum(["ALLOW", "DENY"]),
     reasons: z.array(z.string()),
   }),
+  products: z.array(ProductViewSchema).optional().default([]),
 });
 export type ProposalResponse = z.infer<typeof ProposalResponseSchema>;
 

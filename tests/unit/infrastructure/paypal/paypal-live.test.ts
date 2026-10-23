@@ -35,7 +35,9 @@ function getCredentials(): { clientId?: string | undefined; clientSecret?: strin
 }
 
 const creds = getCredentials();
-const hasCredentials = Boolean(creds.clientId && creds.clientSecret);
+const hasCredentials = Boolean(
+  process.env.TEST_PAYPAL_LIVE === "true" && creds.clientId && creds.clientSecret,
+);
 
 describe.skipIf(!hasCredentials)("PayPalAdapter (Live Sandbox Smoke Test)", () => {
   it("authenticates and creates an order in real PayPal Sandbox", async () => {

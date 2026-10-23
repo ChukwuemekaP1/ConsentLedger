@@ -59,6 +59,7 @@ export function proposalResponse(): ProposalResponse {
     },
     proposal: { rationale: "Matches your request" },
     evaluation: { decision: "ALLOW", reasons: [] },
+    products: [],
   };
 }
 
@@ -148,6 +149,7 @@ export function makeApi(overrides: Partial<AgentApi> = {}): FakeApi {
       ok<OrderResponse>({ orderId: "PAYPAL-ORDER-1", paymentMandateId: "pm-1", status: "CREATED" }),
     captureOrder: async () =>
       ok<CaptureResponse>({ orderId: "PAYPAL-ORDER-1", captureId: "CAP-1", status: "COMPLETED" }),
+    searchProducts: async (q: string) => ok({ query: q, count: 0, products: [] }),
     ...overrides,
   };
   return {
@@ -155,6 +157,7 @@ export function makeApi(overrides: Partial<AgentApi> = {}): FakeApi {
     requestRegistrationOptions: vi.fn(base.requestRegistrationOptions),
     verifyRegistration: vi.fn(base.verifyRegistration),
     propose: vi.fn(base.propose),
+    searchProducts: vi.fn(base.searchProducts),
     requestConsentOptions: vi.fn(base.requestConsentOptions),
     verifyConsent: vi.fn(base.verifyConsent),
     createOrder: vi.fn(base.createOrder),

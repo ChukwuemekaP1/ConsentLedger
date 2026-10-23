@@ -18,8 +18,8 @@ import type {
 import { PurchaseProposalSchema } from "../../application/ports/propose-port.js";
 import type { ProductCatalog } from "../../application/ports/catalog-port.js";
 
-const DEFAULT_MODEL = "gemini-1.5-pro";
-const MAX_TURNS = 5;
+const DEFAULT_MODEL = "gemini-3.5-flash";
+const MAX_TURNS = 10;
 
 // Gemini REST schemas for function declaration
 const GEMINI_TOOLS = [
@@ -136,9 +136,17 @@ const SYSTEM_INSTRUCTION = {
         "4. When ready, you MUST call `propose_cart` with exact integer minor units (e.g. 8500 for $85.00). " +
         "The sum of (quantity * unitAmountMinor) for all items must exactly equal payment.amountMinor.\n" +
         "5. Never output floating-point currency numbers.\n" +
-        "6. RATIONALE & BUYER REASSURANCE: In `propose_cart.rationale`, write a detailed, reassuring buyer analysis: " +
+        "6. Only propose SKUs, prices and merchants that were returned by a tool call. Never invent a product or store. " +
+        "If the search returns nothing suitable, refine the query (shorter, more generic keywords) and search again.\n" +
+        "7. Respect any price ceiling the user states: prefer items at or below it.\n" +
+        "8. RATIONALE & BUYER REASSURANCE: In `propose_cart.rationale`, write a detailed, reassuring buyer analysis: " +
         "highlight key product specifications, explicitly compare it against lower-quality or overpriced alternatives, " +
-        "and reassure the human buyer why this represents the best value for their designated budget and quality needs.",
+        "and reassure the human buyer why this represents the best value for their designated budget and quality needs.\n" +
+        "9. SPEED & TOOL CONVERGENCE (CRITICAL):\n" +
+        "   - Call `search_products` with a relevant search query.\n" +
+        "   - As soon as `search_products` returns matching items, IMMEDIATELY select the best item and invoke `propose_cart` on your next turn.\n" +
+        "   - Never return chat commentary or plain text without invoking a tool call.\n" +
+        "   - Do NOT make unnecessary extra tool calls if `search_products` already provided the SKU, priceMinor, and merchant.\n",
     },
   ],
 };
@@ -156,16 +164,59 @@ interface GeminiContentPart {
 }
 
 interface GeminiContent {
-  role: "user" | "model" | "function";
+  role: "user" | "model";
   parts: GeminiContentPart[];
 }
 
+export interface GeminiResilienceOptions {
+  /** Models tried, in order, after the primary model is rate limited or unavailable. */
+  readonly fallbackModels?: readonly string[];
+  /** Retries per request on HTTP 429/503 before moving to the next model. */
+  readonly maxRetries?: number;
+  /** Injected so tests never wait on real time. */
+  readonly sleep?: (ms: number) => Promise<void>;
+  /** Maximum turns for tool calling before aborting. */
+  readonly maxTurns?: number;
+}
+
+const MAX_RETRY_DELAY_MS = 8_000;
+
+const defaultSleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Reads google.rpc.RetryInfo ("retryDelay": "3s") from a Gemini error body.
+ * Returns undefined when absent so the caller falls back to exponential backoff.
+ */
+export function parseRetryDelayMs(body: string): number | undefined {
+  const match = body.match(/"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"/);
+  if (!match?.[1]) return undefined;
+  const seconds = Number(match[1]);
+  return Number.isFinite(seconds) ? Math.round(seconds * 1000) : undefined;
+}
+
+/** A daily quota cannot be fixed by waiting; surface it distinctly. */
+function isDailyQuota(body: string): boolean {
+  return /per\s*day|PerDay|daily/i.test(body);
+}
+
 export class GeminiLlmClient implements LlmClient {
+  private readonly fallbackModels: readonly string[];
+  private readonly maxRetries: number;
+  private readonly sleep: (ms: number) => Promise<void>;
+  private readonly maxTurns: number;
+
   constructor(
     private readonly apiKey: string = "",
     private readonly defaultModel: string = DEFAULT_MODEL,
     private readonly fetchFn: typeof fetch = globalThis.fetch,
-  ) {}
+    resilience: GeminiResilienceOptions = {},
+  ) {
+    this.fallbackModels = resilience.fallbackModels ?? [];
+    this.maxRetries = resilience.maxRetries ?? 2;
+    this.sleep = resilience.sleep ?? defaultSleep;
+    this.maxTurns = resilience.maxTurns ?? (process.env.NODE_ENV === "test" ? 5 : 10);
+  }
 
   async generateProposal(
     prompt: string,
@@ -180,7 +231,94 @@ export class GeminiLlmClient implements LlmClient {
       });
     }
 
-    const model = options?.model ?? this.defaultModel;
+    const primary = options?.model ?? this.defaultModel;
+    const chain = [primary, ...this.fallbackModels.filter((m) => m !== primary)];
+
+    // Each model gets a fresh conversation: thought signatures are model-bound,
+    // so a half-finished tool loop cannot be continued on a different model.
+    let lastError: LlmError | undefined;
+    for (const model of chain) {
+      const result = await this.runConversation(model, prompt, catalog);
+      if (result.ok) return result;
+      lastError = result.error;
+      const shouldFallBack =
+        result.error.kind === "RATE_LIMITED" ||
+        (result.error.kind === "PROVIDER_ERROR" && result.error.retryable);
+      if (!shouldFallBack) return result;
+    }
+
+    return err(
+      lastError ?? {
+        kind: "PROVIDER_ERROR",
+        message: "No Gemini model available",
+        retryable: true,
+      },
+    );
+  }
+
+  /** POST with bounded retries on 429/503, honouring RetryInfo when present. */
+  private async postWithRetry(endpoint: string, body: string): Promise<Result<Response, LlmError>> {
+    for (let attempt = 0; ; attempt++) {
+      let response: Response;
+      try {
+        response = await this.fetchFn(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": this.apiKey,
+          },
+          body,
+        });
+      } catch (networkError) {
+        return err({
+          kind: "PROVIDER_ERROR",
+          message: `Network failure connecting to Gemini: ${networkError instanceof Error ? networkError.message : String(networkError)}`,
+          retryable: true,
+          details: networkError,
+        });
+      }
+
+      if (response.status !== 429 && response.status !== 503) return ok(response);
+
+      let errorText = "";
+      try {
+        errorText = await response.text();
+      } catch {
+        // body unreadable; fall back to default backoff
+      }
+
+      const daily = response.status === 429 && isDailyQuota(errorText);
+      if (daily || attempt >= this.maxRetries) {
+        if (response.status === 429) {
+          return err({
+            kind: "RATE_LIMITED",
+            message: daily
+              ? "Gemini daily quota exhausted (HTTP 429). Waiting will not help until the quota resets or billing is enabled."
+              : "Gemini rate limit exceeded (HTTP 429). Please retry shortly.",
+            retryable: !daily,
+            details: { daily },
+          });
+        }
+        return err({
+          kind: "PROVIDER_ERROR",
+          message: `Gemini API returned HTTP 503: ${errorText.slice(0, 300)}`,
+          retryable: true,
+        });
+      }
+
+      const delay = Math.min(
+        parseRetryDelayMs(errorText) ?? 1000 * 2 ** attempt,
+        MAX_RETRY_DELAY_MS,
+      );
+      await this.sleep(delay);
+    }
+  }
+
+  private async runConversation(
+    model: string,
+    prompt: string,
+    catalog: ProductCatalog,
+  ): Promise<Result<PurchaseProposal, LlmError>> {
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
 
     const contents: GeminiContent[] = [
@@ -192,7 +330,7 @@ export class GeminiLlmClient implements LlmClient {
 
     let retrySchemaCount = 0;
 
-    for (let step = 0; step < MAX_TURNS; step++) {
+    for (let step = 0; step < this.maxTurns; step++) {
       const requestBody = {
         systemInstruction: SYSTEM_INSTRUCTION,
         contents,
@@ -202,32 +340,9 @@ export class GeminiLlmClient implements LlmClient {
         },
       };
 
-      let response: Response;
-      try {
-        response = await this.fetchFn(endpoint, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-goog-api-key": this.apiKey,
-          },
-          body: JSON.stringify(requestBody),
-        });
-      } catch (networkError) {
-        return err({
-          kind: "PROVIDER_ERROR",
-          message: `Network failure connecting to Gemini: ${networkError instanceof Error ? networkError.message : String(networkError)}`,
-          retryable: true,
-          details: networkError,
-        });
-      }
-
-      if (response.status === 429) {
-        return err({
-          kind: "RATE_LIMITED",
-          message: "Gemini rate limit exceeded (HTTP 429). Please retry shortly.",
-          retryable: true,
-        });
-      }
+      const posted = await this.postWithRetry(endpoint, JSON.stringify(requestBody));
+      if (!posted.ok) return posted;
+      const response = posted.value;
 
       if (!response.ok) {
         let errorText = "";
@@ -239,7 +354,8 @@ export class GeminiLlmClient implements LlmClient {
         return err({
           kind: "PROVIDER_ERROR",
           message: `Gemini API returned HTTP ${response.status}: ${errorText.slice(0, 300)}`,
-          retryable: response.status >= 500,
+          // 404 means the model is retired for this key; let the chain try the next one.
+          retryable: response.status >= 500 || response.status === 404,
         });
       }
 
@@ -282,7 +398,7 @@ export class GeminiLlmClient implements LlmClient {
       const functionCallPart = modelParts.find((p) => p.functionCall);
       if (!functionCallPart || !functionCallPart.functionCall) {
         // Model provided plain text without calling a tool
-        if (step === MAX_TURNS - 1) {
+        if (step === this.maxTurns - 1) {
           return err({
             kind: "NO_PROPOSAL",
             message: "Model did not propose a cart within the turn limit.",
@@ -291,11 +407,16 @@ export class GeminiLlmClient implements LlmClient {
         }
 
         // Prompt model to use tools
+        const hasSearchResults = contents.some((c) =>
+          c.parts.some((p) => p.functionResponse?.name === "search_products"),
+        );
         contents.push({
           role: "user",
           parts: [
             {
-              text: "Please search the product catalog and formulate a cart proposal using propose_cart.",
+              text: hasSearchResults
+                ? "You have already received search results. Select the best item and call `propose_cart` now."
+                : "Please search the product catalog using `search_products` and formulate a cart proposal using `propose_cart`.",
             },
           ],
         });
@@ -314,7 +435,7 @@ export class GeminiLlmClient implements LlmClient {
         if (retrySchemaCount < 1) {
           retrySchemaCount++;
           contents.push({
-            role: "function",
+            role: "user",
             parts: [
               {
                 functionResponse: {
@@ -343,10 +464,21 @@ export class GeminiLlmClient implements LlmClient {
       if (call.name === "search_products") {
         const query = typeof call.args["query"] === "string" ? call.args["query"] : "";
         const limit = typeof call.args["limit"] === "number" ? call.args["limit"] : undefined;
-        const results = await catalog.search(query, limit !== undefined ? { limit } : undefined);
+        let results: Awaited<ReturnType<ProductCatalog["search"]>>;
+        try {
+          results = await catalog.search(query, limit !== undefined ? { limit } : undefined);
+        } catch (catalogError) {
+          // Fail closed: never let the model improvise products when real stores are unreachable.
+          return err({
+            kind: "NO_PROPOSAL",
+            message: `We couldn't reach the stores right now (${catalogError instanceof Error ? catalogError.message : "catalog error"}).`,
+            retryable: false,
+            details: { catalogUnavailable: true },
+          });
+        }
 
         contents.push({
-          role: "function",
+          role: "user",
           parts: [
             {
               functionResponse: {
@@ -371,10 +503,15 @@ export class GeminiLlmClient implements LlmClient {
 
       if (call.name === "get_product_details") {
         const sku = typeof call.args["sku"] === "string" ? call.args["sku"] : "";
-        const item = await catalog.getDetails(sku);
+        let item: Awaited<ReturnType<ProductCatalog["getDetails"]>>;
+        try {
+          item = await catalog.getDetails(sku);
+        } catch {
+          item = null;
+        }
 
         contents.push({
-          role: "function",
+          role: "user",
           parts: [
             {
               functionResponse: {
@@ -401,7 +538,7 @@ export class GeminiLlmClient implements LlmClient {
 
       // Unknown tool call
       contents.push({
-        role: "function",
+        role: "user",
         parts: [
           {
             functionResponse: {
@@ -417,7 +554,7 @@ export class GeminiLlmClient implements LlmClient {
 
     return err({
       kind: "MAX_STEPS_EXCEEDED",
-      message: `Agent exceeded maximum turn limit (${MAX_TURNS}) without producing a valid cart proposal.`,
+      message: `Agent exceeded maximum turn limit (${this.maxTurns}) without producing a valid cart proposal.`,
       retryable: false,
     });
   }

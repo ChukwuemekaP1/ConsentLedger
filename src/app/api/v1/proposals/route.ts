@@ -123,13 +123,17 @@ export async function POST(request: Request): Promise<Response> {
       }
 
       if (result.error.kind === "LLM_ERROR") {
-        const llmErr = result.error.details as { kind?: string } | undefined;
+        const llmErr = result.error.details as
+          | { kind?: string; details?: { daily?: boolean; catalogUnavailable?: boolean } }
+          | undefined;
         if (llmErr?.kind === "RATE_LIMITED") {
+          const daily = llmErr.details?.daily === true;
           return Response.json(
             {
               type: "https://consentledger.dev/problems/rate-limited",
               title: "Rate Limited",
               status: 429,
+              code: daily ? "AI_QUOTA_EXHAUSTED" : "RATE_LIMITED",
               detail: result.error.message,
             },
             {
@@ -137,7 +141,26 @@ export async function POST(request: Request): Promise<Response> {
               headers: {
                 "Content-Type": "application/problem+json",
                 "x-request-id": requestId,
-                "Retry-After": "10",
+                "Retry-After": daily ? "3600" : "10",
+              },
+            },
+          );
+        }
+
+        if (llmErr?.details?.catalogUnavailable === true) {
+          return Response.json(
+            {
+              type: "https://consentledger.dev/problems/catalog-unavailable",
+              title: "Stores unreachable",
+              status: 503,
+              code: "CATALOG_UNAVAILABLE",
+              detail: result.error.message,
+            },
+            {
+              status: 503,
+              headers: {
+                "Content-Type": "application/problem+json",
+                "x-request-id": requestId,
               },
             },
           );
@@ -148,6 +171,7 @@ export async function POST(request: Request): Promise<Response> {
             type: "https://consentledger.dev/problems/llm-error",
             title: "AI Proposal Generation Error",
             status: 502,
+            code: "AI_PROPOSAL_FAILED",
             detail: result.error.message,
           },
           {
@@ -185,6 +209,7 @@ export async function POST(request: Request): Promise<Response> {
         mandate: result.value.mandate,
         proposal: result.value.proposal,
         evaluation: result.value.evaluation,
+        products: result.value.products,
       },
       {
         status: 201,
